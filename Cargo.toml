@@ -1,0 +1,10 @@
+[package]
+name = "rusty_jsc"
+version = "0.0.1"
+authors = [ "Pekka Enberg" ]
+edition = "2021"
+
+[lib]
+
+[dependencies]
+rusty_jsc_sys = { path = "./sys" }

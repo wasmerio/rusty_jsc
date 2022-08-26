@@ -1,0 +1,10 @@
+[package]
+name = "rusty_jsc_sys"
+version = "0.0.1"
+authors = [ "Pekka Enberg" ]
+edition = "2021"
+
+[lib]
+
+[target.'cfg(target_os = "linux")'.build-dependencies]
+pkg-config = "0.3.9"
