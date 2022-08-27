@@ -2,7 +2,10 @@
 
 [![crates](https://img.shields.io/crates/v/rusty_jsc.svg)](https://crates.io/crates/rusty_jsc)
 
-This library provides a Rust API for the JavaScriptCore engine.
+This library provides a Rust API for the JavaScriptCore engine with the following goals:
+
+* High-level API like the JavaScriptCore API for Swift
+* Wrap the low-level C++ API instead of `jsc` to avoid the dependency to GTK.
 
 ## FAQ
 
