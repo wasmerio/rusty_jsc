@@ -1,6 +1,7 @@
 # JavaScriptCore API for Rust
 
 [![crates](https://img.shields.io/crates/v/rusty_jsc.svg)](https://crates.io/crates/rusty_jsc)
+[![docs](https://docs.rs/rusty_jsc/badge.svg)](https://docs.rs/rusty_jsc)
 
 This library provides a Rust API for the JavaScriptCore engine with the following goals:
 
