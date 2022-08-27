@@ -7,6 +7,8 @@
 //! call its `evaluate_script` method.
 //!
 //! ```rust
+//! use rusty_jsc::JSContext;
+//!
 //! let mut context = JSContext::default();
 //! match context.evaluate_script("'hello, world'", 1) {
 //!     Some(value) => {
