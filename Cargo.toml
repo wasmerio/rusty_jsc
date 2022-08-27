@@ -2,6 +2,7 @@
 name = "rusty_jsc"
 version = "0.0.1"
 description = "Rust bindings for the JavaScriptCore engine"
+keywords = [ "javascriptcore", "javascript" ]
 authors = [ "Pekka Enberg" ]
 license = "MIT"
 repository = "https://github.com/penberg/rusty_jsc"
