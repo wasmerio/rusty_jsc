@@ -49,22 +49,50 @@ impl JSValue {
 
     /// Checks if this value is `null`.
     fn is_null(&self, context: &JSContext) -> bool {
-        unsafe { JSValueIsNull(context.global_context, self.inner) }
+        unsafe { JSValueIsNull(context.inner, self.inner) }
     }
 
     /// Formats this value as a `String`.
     pub fn to_string(&self, context: &JSContext) -> String {
         let mut exception: JSValueRef = std::ptr::null_mut();
-        let s = unsafe { JSValueToStringCopy(context.global_context, self.inner, &mut exception) };
+        let s = unsafe { JSValueToStringCopy(context.inner, self.inner, &mut exception) };
         let s = JSString::from(s);
         s.to_string()
     }
 }
 
-/// A JavaScript execution context.
-pub struct JSContext {
+/// A JavaScript virtual machine.
+pub struct JSVirtualMachine {
     context_group: JSContextGroupRef,
     global_context: JSGlobalContextRef,
+}
+
+impl Drop for JSVirtualMachine {
+    fn drop(&mut self) {
+        unsafe {
+            JSGlobalContextRelease(self.global_context);
+            JSContextGroupRelease(self.context_group);
+        }
+    }
+}
+
+impl JSVirtualMachine {
+    /// Creates a new `JSVirtualMachine` object.
+    fn new() -> Self {
+        let context_group = unsafe { JSContextGroupCreate() };
+        let global_context =
+            unsafe { JSGlobalContextCreateInGroup(context_group, std::ptr::null_mut()) };
+        Self {
+            context_group,
+            global_context,
+        }
+    }
+}
+
+/// A JavaScript execution context.
+pub struct JSContext {
+    inner: JSContextRef,
+    vm: JSVirtualMachine,
     exception: Option<JSValue>,
 }
 
@@ -74,24 +102,26 @@ impl Default for JSContext {
     }
 }
 
-impl Drop for JSContext {
-    fn drop(&mut self) {
-        unsafe {
-            JSGlobalContextRelease(self.global_context);
-            JSContextGroupRelease(self.context_group);
-        }
-    }
-}
-
 impl JSContext {
     /// Create a new `JSContext` object.
+    ///
+    /// Note that this associated function also creates a new `JSVirtualMachine`.
+    /// If you want to create a `JSContext` object within an existing virtual
+    /// machine, please use the `with_virtual_machine` associated function.
     pub fn new() -> Self {
-        let context_group = unsafe { JSContextGroupCreate() };
-        let global_context =
-            unsafe { JSGlobalContextCreateInGroup(context_group, std::ptr::null_mut()) };
+        let vm = JSVirtualMachine::new();
         Self {
-            context_group,
-            global_context,
+            inner: vm.global_context,
+            vm,
+            exception: None,
+        }
+    }
+
+    /// Create a new `JSContext` object within the provided `JSVirtualMachine`.
+    pub fn with_virtual_machine(vm: JSVirtualMachine) -> Self {
+        Self {
+            inner: vm.global_context,
+            vm,
             exception: None,
         }
     }
@@ -115,7 +145,7 @@ impl JSContext {
         let mut exception: JSValueRef = std::ptr::null_mut();
         let value = unsafe {
             JSEvaluateScript(
-                self.global_context,
+                self.vm.global_context,
                 script,
                 this_object,
                 source_url,
