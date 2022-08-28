@@ -26,6 +26,7 @@
 mod internal;
 
 use crate::internal::JSString;
+use anyhow::Result;
 use rusty_jsc_sys::*;
 use std::ffi::CString;
 
@@ -47,9 +48,58 @@ impl JSValue {
         Self { inner }
     }
 
+    /// Creates an `undefined` value.
+    pub fn undefined(context: JSContext) -> JSValue {
+        JSValue::from(unsafe { JSValueMakeUndefined(context.inner) })
+    }
+
+    /// Creates a `null` value.
+    pub fn null(context: JSContext) -> JSValue {
+        JSValue::from(unsafe { JSValueMakeNull(context.inner) })
+    }
+
+    /// Creates a `boolean` value.
+    pub fn boolean(context: JSContext, value: bool) -> JSValue {
+        JSValue::from(unsafe { JSValueMakeBoolean(context.inner, value) })
+    }
+
+    /// Creates a `number` value.
+    pub fn number(context: JSContext, value: f64) -> JSValue {
+        JSValue::from(unsafe { JSValueMakeNumber(context.inner, value) })
+    }
+
+    /// Creates a `string` value.
+    pub fn string(context: JSContext, value: String) -> Result<JSValue> {
+        let value = CString::new(value.as_bytes())?;
+        let value = unsafe { JSStringCreateWithUTF8CString(value.as_ptr()) };
+        Ok(JSValue::from(unsafe {
+            JSValueMakeString(context.inner, value)
+        }))
+    }
+
+    /// Checks if this value is `undefined`.
+    pub fn is_undefined(&self, context: &JSContext) -> bool {
+        unsafe { JSValueIsUndefined(context.inner, self.inner) }
+    }
+
     /// Checks if this value is `null`.
-    fn is_null(&self, context: &JSContext) -> bool {
+    pub fn is_null(&self, context: &JSContext) -> bool {
         unsafe { JSValueIsNull(context.inner, self.inner) }
+    }
+
+    /// Checks if this value is `boolean`.
+    pub fn is_boolean(&self, context: &JSContext) -> bool {
+        unsafe { JSValueIsBoolean(context.inner, self.inner) }
+    }
+
+    /// Checks if this value is `number`.
+    pub fn is_number(&self, context: &JSContext) -> bool {
+        unsafe { JSValueIsNumber(context.inner, self.inner) }
+    }
+
+    /// Checks if this value is `string`.
+    pub fn is_string(&self, context: &JSContext) -> bool {
+        unsafe { JSValueIsString(context.inner, self.inner) }
     }
 
     /// Formats this value as a `String`.

@@ -11,4 +11,5 @@ edition = "2021"
 [lib]
 
 [dependencies]
+anyhow = "1.0.62"
 rusty_jsc_sys = { path = "./sys", version = "0.0.1" }
