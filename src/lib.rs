@@ -48,27 +48,27 @@ impl JSValue {
     }
 
     /// Creates an `undefined` value.
-    pub fn undefined(context: JSContext) -> JSValue {
+    pub fn undefined(context: &JSContext) -> JSValue {
         JSValue::from(unsafe { JSValueMakeUndefined(context.inner) })
     }
 
     /// Creates a `null` value.
-    pub fn null(context: JSContext) -> JSValue {
+    pub fn null(context: &JSContext) -> JSValue {
         JSValue::from(unsafe { JSValueMakeNull(context.inner) })
     }
 
     /// Creates a `boolean` value.
-    pub fn boolean(context: JSContext, value: bool) -> JSValue {
+    pub fn boolean(context: &JSContext, value: bool) -> JSValue {
         JSValue::from(unsafe { JSValueMakeBoolean(context.inner, value) })
     }
 
     /// Creates a `number` value.
-    pub fn number(context: JSContext, value: f64) -> JSValue {
+    pub fn number(context: &JSContext, value: f64) -> JSValue {
         JSValue::from(unsafe { JSValueMakeNumber(context.inner, value) })
     }
 
     /// Creates a `string` value.
-    pub fn string(context: JSContext, value: String) -> Result<JSValue> {
+    pub fn string(context: &JSContext, value: String) -> Result<JSValue> {
         let value = JSString::from_utf8(value)?;
         Ok(JSValue::from(unsafe {
             JSValueMakeString(context.inner, value.inner)
@@ -106,6 +106,42 @@ impl JSValue {
         let s = unsafe { JSValueToStringCopy(context.inner, self.inner, &mut exception) };
         let s = JSString::from(s);
         s.to_string()
+    }
+}
+
+/// A JavaScript object.
+#[derive(Debug)]
+pub struct JSObject {
+    inner: JSObjectRef,
+}
+
+impl Drop for JSObject {
+    fn drop(&mut self) {
+        // TODO
+    }
+}
+
+impl JSObject {
+    /// Wraps a `JSObject` from a `JSObjectRef`.
+    fn from(inner: JSObjectRef) -> Self {
+        Self { inner }
+    }
+
+    /// Sets the property of an object.
+    pub fn set_property(&mut self, context: &JSContext, property_name: String, value: JSValue) {
+        let property_name = JSString::from_utf8(property_name).unwrap();
+        let attributes = 0; // TODO
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        unsafe {
+            JSObjectSetProperty(
+                context.inner,
+                self.inner,
+                property_name.inner,
+                value.inner,
+                attributes,
+                &mut exception,
+            )
+        }
     }
 }
 
@@ -175,8 +211,8 @@ impl JSContext {
     }
 
     /// Returns the context global object.
-    pub fn get_global_object(&self) -> JSValue {
-        JSValue::from(unsafe { JSContextGetGlobalObject(self.inner) })
+    pub fn get_global_object(&self) -> JSObject {
+        JSObject::from(unsafe { JSContextGetGlobalObject(self.inner) })
     }
 
     /// Return the exception thrown while evaluating a script.
