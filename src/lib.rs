@@ -174,6 +174,11 @@ impl JSContext {
         }
     }
 
+    /// Returns the context global object.
+    pub fn get_global_object(&self) -> JSValue {
+        JSValue::from(unsafe { JSContextGetGlobalObject(self.inner) })
+    }
+
     /// Return the exception thrown while evaluating a script.
     pub fn get_exception(&self) -> Option<&JSValue> {
         self.exception.as_ref()
