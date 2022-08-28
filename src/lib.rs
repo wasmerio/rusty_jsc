@@ -75,6 +75,12 @@ impl JSValue {
         }))
     }
 
+    pub fn callback(context: &JSContext, callback: JSObjectCallAsFunctionCallback) -> JSValue {
+        let name = JSString::from_utf8("".to_string()).unwrap();
+        let func = unsafe { JSObjectMakeFunctionWithCallback(context.inner, name.inner, callback) };
+        JSValue::from(func)
+    }
+
     /// Checks if this value is `undefined`.
     pub fn is_undefined(&self, context: &JSContext) -> bool {
         unsafe { JSValueIsUndefined(context.inner, self.inner) }
