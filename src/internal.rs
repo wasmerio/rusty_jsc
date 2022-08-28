@@ -1,8 +1,10 @@
+use anyhow::Result;
 use rusty_jsc_sys::*;
+use std::ffi::CString;
 
 /// A JavaScript string.
 pub struct JSString {
-    inner: JSStringRef,
+    pub inner: JSStringRef,
 }
 
 impl Drop for JSString {
@@ -27,5 +29,11 @@ impl std::fmt::Display for JSString {
 impl JSString {
     pub fn from(inner: JSStringRef) -> Self {
         Self { inner }
+    }
+
+    pub fn from_utf8(value: String) -> Result<Self> {
+        let value = CString::new(value.as_bytes())?;
+        let value = unsafe { JSStringCreateWithUTF8CString(value.as_ptr()) };
+        Ok(JSString::from(value))
     }
 }

@@ -28,7 +28,6 @@ mod internal;
 use crate::internal::JSString;
 use anyhow::Result;
 use rusty_jsc_sys::*;
-use std::ffi::CString;
 
 /// A JavaScript value.
 #[derive(Debug)]
@@ -70,10 +69,9 @@ impl JSValue {
 
     /// Creates a `string` value.
     pub fn string(context: JSContext, value: String) -> Result<JSValue> {
-        let value = CString::new(value.as_bytes())?;
-        let value = unsafe { JSStringCreateWithUTF8CString(value.as_ptr()) };
+        let value = JSString::from_utf8(value)?;
         Ok(JSValue::from(unsafe {
-            JSValueMakeString(context.inner, value)
+            JSValueMakeString(context.inner, value.inner)
         }))
     }
 
@@ -188,15 +186,14 @@ impl JSContext {
     /// exception with the `get_exception` method.
     pub fn evaluate_script(&mut self, script: &str, starting_line_number: i32) -> Option<JSValue> {
         self.exception = None;
-        let script = CString::new(script.as_bytes()).unwrap();
-        let script = unsafe { JSStringCreateWithUTF8CString(script.as_ptr()) };
+        let script = JSString::from_utf8(script.to_string()).unwrap();
         let this_object = std::ptr::null_mut();
         let source_url = std::ptr::null_mut();
         let mut exception: JSValueRef = std::ptr::null_mut();
         let value = unsafe {
             JSEvaluateScript(
                 self.vm.global_context,
-                script,
+                script.inner,
                 this_object,
                 source_url,
                 starting_line_number,
