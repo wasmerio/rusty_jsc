@@ -16,6 +16,8 @@ let mut context = JSContext::default();
 let value = context.evaluate_script("'hello, world'", 1);
 if let Some(value) = value {
     println!("{}", value.to_string(&context));
+    // Prints:
+    // hello, world
 }
 ```
 
