@@ -8,6 +8,17 @@ This library provides a Rust API for the JavaScriptCore engine with the followin
 * High-level API like the JavaScriptCore API for Swift
 * Wrap the low-level C++ API instead of `jsc` to avoid the dependency to GTK.
 
+## Getting Started
+
+### Evaluating a JavaScript script
+```rust
+let mut context = JSContext::default();
+let value = context.evaluate_script("'hello, world'", 1);
+if let Some(value) = value {
+    println!("{}", value.to_string(&context));
+}
+```
+
 ## FAQ
 
 ### What about the other JavaScriptCore bindings for Rust?
