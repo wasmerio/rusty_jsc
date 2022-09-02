@@ -1,0 +1,16 @@
+[package]
+name = "rusty_jsc_macros"
+version = "0.0.1"
+description = "Macros for rusty_jsc"
+authors = [ "Pekka Enberg" ]
+license = "MIT"
+edition = "2021"
+
+[lib]
+proc-macro = true
+[target.'cfg(target_os = "linux")'.build-dependencies]
+pkg-config = "0.3.9"
+
+[dependencies]
+quote = "1.0.21"
+syn = { version = "1", features = [ "full" ] }
