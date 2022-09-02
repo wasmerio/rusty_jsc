@@ -167,6 +167,22 @@ impl Drop for JSVirtualMachine {
 }
 
 impl JSVirtualMachine {
+    /// Creates a new `JSVirtualMachine` object from a context.
+    fn from(context: JSContextRef) -> Self {
+        let global_context = unsafe { JSContextGetGlobalContext(context) };
+        unsafe {
+            JSGlobalContextRetain(global_context);
+        }
+        let context_group = unsafe { JSContextGetGroup(global_context) };
+        unsafe {
+            JSContextGroupRetain(context_group);
+        }
+        Self {
+            context_group,
+            global_context,
+        }
+    }
+
     /// Creates a new `JSVirtualMachine` object.
     fn new() -> Self {
         let context_group = unsafe { JSContextGroupCreate() };
@@ -193,6 +209,16 @@ impl Default for JSContext {
 }
 
 impl JSContext {
+    /// Create a `JSContext` object from `JSContextRef`.
+    pub fn from(ctx: JSContextRef) -> Self {
+        let vm = JSVirtualMachine::from(ctx);
+        Self {
+            inner: ctx,
+            vm,
+            exception: None,
+        }
+    }
+
     /// Create a new `JSContext` object.
     ///
     /// Note that this associated function also creates a new `JSVirtualMachine`.
