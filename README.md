@@ -25,7 +25,7 @@ if let Some(value) = value {
 
 ### Callbacks from JavaScript to Rust
 
-```
+```rust
 use rusty_jsc::{JSContext, JSValue};
 use rusty_jsc_macros::callback;
 
