@@ -1,6 +1,6 @@
 [package]
 name = "rusty_jsc_sys"
-version = "0.0.2"
+version = "0.0.3"
 description = "Raw bindings for the JavaScriptCore engine"
 authors = [ "Pekka Enberg" ]
 license = "MIT"

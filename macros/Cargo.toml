@@ -1,6 +1,6 @@
 [package]
 name = "rusty_jsc_macros"
-version = "0.0.2"
+version = "0.0.3"
 description = "Macros for rusty_jsc"
 authors = [ "Pekka Enberg" ]
 license = "MIT"
