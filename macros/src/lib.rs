@@ -7,7 +7,7 @@ pub fn callback(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let name = &func.sig.ident;
     let target_func = {
         let mut func = func.clone();
-        func.sig.ident = quote::format_ident!("call");
+        func.sig.ident = quote::format_ident!("{}_call", name);
         func
     };
     let target_name = &target_func.sig.ident;
