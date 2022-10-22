@@ -1,0 +1,17 @@
+[package]
+name = "punjs"
+version = "0.0.0"
+authors = ["Pekka Enberg"]
+edition = "2021"
+default-run = "punjs"
+
+[[bin]]
+name = "punjs"
+path = "main.rs"
+
+[dependencies]
+anyhow = "1.0.62"
+clap = { version = "3.2.22", features = [ "derive" ] }
+rusty_jsc = { path = "../../../" }
+rusty_jsc_macros = { path = "../../../macros" }
+rusty_jsc_sys = { path = "../../../sys" }

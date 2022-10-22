@@ -10,6 +10,10 @@ This library provides a Rust API for the JavaScriptCore engine with the followin
 
 ## Getting Started
 
+### Implementing a JavaScript runtime
+
+Please check out [PunJS](examples/punjs) for an example of how to implement a JavaScript runtime with `rusty_jsc`.
+
 ### Evaluating a JavaScript script
 ```rust
 use rusty_jsc::JSContext;
