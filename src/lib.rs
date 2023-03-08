@@ -28,6 +28,8 @@ mod internal;
 use crate::internal::JSString;
 use anyhow::Result;
 use rusty_jsc_sys::*;
+use std::fmt;
+
 
 /// A JavaScript value.
 #[derive(Debug)]
@@ -113,7 +115,15 @@ impl JSValue {
         let s = JSString::from(s);
         s.to_string()
     }
+
+    // Tries to convert the value to an object
+    pub fn to_object(&self, context: &JSContext) -> JSObject {
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let object_ref = unsafe { JSValueToObject(context.inner, self.inner, &mut exception) };
+        JSObject::from(object_ref)
+    }
 }
+
 
 /// A JavaScript object.
 #[derive(Debug)]
@@ -131,6 +141,51 @@ impl JSObject {
     /// Wraps a `JSObject` from a `JSObjectRef`.
     fn from(inner: JSObjectRef) -> Self {
         Self { inner }
+    }
+
+    /// Calls the object constructor
+    pub fn construct(&mut self, context: &JSContext, args: &[JSValue]) -> Result<Self, JSValue> {
+        let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>().as_slice().as_ptr();
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let result = unsafe {
+            JSObjectCallAsConstructor(context.inner, self.inner, args.len() as _,  args_refs, &mut exception)
+        };
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        if result.is_null() {
+            panic!("Not a valid constructor");
+        }
+        // if result.is_null() {
+        //     panic!("The object has no constructor");
+        // }
+        Ok(Self::from(result))
+    }
+
+    /// Calls the object constructor
+    pub fn to_jsvalue(&self) -> JSValue {
+        JSValue::from(self.inner)
+    }
+
+    pub fn create_typed_array_with_bytes(context: &JSContext, bytes: &mut [u8]) -> Result<Self, JSValue> {
+        let deallocator_ctx = std::ptr::null_mut();
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let result = unsafe { JSObjectMakeTypedArrayWithBytesNoCopy(context.inner, JSTypedArrayType_kJSTypedArrayTypeUint8Array, bytes.as_mut_ptr() as _, bytes.len() as _, None, deallocator_ctx, &mut exception) };
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        if result.is_null() {
+            panic!("Can't create the typed array");
+        }
+        Ok(Self::from(result))
+    }
+
+    /// Gets the property of an object.
+    pub fn get_property(&mut self, context: &JSContext, property_name: String) -> JSValue {
+        let property_name = JSString::from_utf8(property_name).unwrap();
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let jsvalue_ref = unsafe { JSObjectGetProperty(context.inner, self.inner, property_name.inner, &mut exception) };
+        JSValue::from(jsvalue_ref)
     }
 
     /// Sets the property of an object.
