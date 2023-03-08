@@ -17,12 +17,7 @@ impl Drop for JSString {
 
 impl std::fmt::Display for JSString {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let len = unsafe { JSStringGetMaximumUTF8CStringSize(self.inner) };
-        let mut chars = vec![0i8; len as usize];
-        let len = unsafe { JSStringGetUTF8CString(self.inner, chars.as_mut_ptr(), len) };
-        let chars = &chars[0..(len - 1) as usize];
-        let s = String::from_utf8(chars.iter().map(|&c| c as u8).collect()).unwrap();
-        write!(fmt, "{}", s)
+        write!(fmt, "{}", self.to_string())
     }
 }
 
@@ -35,5 +30,14 @@ impl JSString {
         let value = CString::new(value.as_bytes())?;
         let value = unsafe { JSStringCreateWithUTF8CString(value.as_ptr()) };
         Ok(JSString::from(value))
+    }
+
+    pub fn to_string(&self) -> String {
+        let len = unsafe { JSStringGetMaximumUTF8CStringSize(self.inner) };
+        // let len = unsafe { JSStringGetLength(self.inner) };
+        let mut chars = vec![0i8; len as usize];
+        let len = unsafe { JSStringGetUTF8CString(self.inner, chars.as_mut_ptr(), len) };
+        let chars = &chars[0..(len - 1) as usize];
+        String::from_utf8(chars.iter().map(|&c| c as u8).collect()).unwrap()
     }
 }

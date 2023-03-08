@@ -29,6 +29,7 @@ use crate::internal::JSString;
 use anyhow::Result;
 use rusty_jsc_sys::*;
 use std::fmt;
+pub use rusty_jsc_macros::callback;
 
 
 /// A JavaScript value.
@@ -117,6 +118,13 @@ impl JSValue {
     }
 
     // Tries to convert the value to an object
+    pub fn to_number(&self, context: &JSContext) -> f64 {
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let num = unsafe { JSValueToNumber(context.inner, self.inner, &mut exception) };
+        num
+    }
+
+    // Tries to convert the value to an object
     pub fn to_object(&self, context: &JSContext) -> JSObject {
         let mut exception: JSValueRef = std::ptr::null_mut();
         let object_ref = unsafe { JSValueToObject(context.inner, self.inner, &mut exception) };
@@ -137,18 +145,39 @@ impl Drop for JSObject {
     }
 }
 
+#[no_mangle]
+pub extern "C" fn id(a: *mut std::ffi::c_void, b: *mut std::ffi::c_void) { }
+
 impl JSObject {
     /// Wraps a `JSObject` from a `JSObjectRef`.
     fn from(inner: JSObjectRef) -> Self {
         Self { inner }
     }
 
+    pub fn new(context: &JSContext) -> Self {
+        let null = std::ptr::null_mut();
+        let o_ref = unsafe { JSObjectMake(context.inner, null, null as _) };
+        Self::from(o_ref)
+    }
+
+    pub fn new_function_with_callback(context: &JSContext, name: String, callback: JSObjectCallAsFunctionCallback) -> Self {
+        let name = JSString::from_utf8(name).unwrap();
+        let o_ref = unsafe { JSObjectMakeFunctionWithCallback(context.inner, name.inner, callback) };
+        Self::from(o_ref)
+        // JSObjectMakeFunction(ctx, name, parameterCount, parameterNames, body, sourceURL, startingLineNumber, exception)
+    }
+
     /// Calls the object constructor
     pub fn construct(&mut self, context: &JSContext, args: &[JSValue]) -> Result<Self, JSValue> {
-        let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>().as_slice().as_ptr();
+        let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>();
         let mut exception: JSValueRef = std::ptr::null_mut();
+
+        // let args_refs_slice = unsafe { std::slice::from_raw_parts(args_refs, 1) };
+        // // println!("args_refs_slice {}", args_refs_slice.len());
+        // let args_back = args_refs_slice.iter().map(|r| JSValue::from(*r)).collect::<Vec<_>>();
+        // println!("CONSTRUCT LEN {} {:?} {}", args.len(), args_refs, args_back[0].to_string(&context));
         let result = unsafe {
-            JSObjectCallAsConstructor(context.inner, self.inner, args.len() as _,  args_refs, &mut exception)
+            JSObjectCallAsConstructor(context.inner, self.inner, args.len() as _,  args_refs.as_slice().as_ptr(), &mut exception)
         };
         if !exception.is_null() {
             return Err(JSValue::from(exception));
@@ -161,6 +190,24 @@ impl JSObject {
         // }
         Ok(Self::from(result))
     }
+
+    /// Call the object as if it a function
+    pub fn call(&mut self, context: &JSContext, this: JSObject, args: &[JSValue]) -> Result<JSValue, JSValue> {
+        let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>();
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let result = unsafe {
+            JSObjectCallAsFunction(context.inner, self.inner, this.inner, args.len() as _,  args_refs.as_slice().as_ptr(), &mut exception)
+        };
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        if result.is_null() {
+            panic!("Not a valid function");
+        }
+        Ok(JSValue::from(result))
+    }
+
+    
 
     /// Calls the object constructor
     pub fn to_jsvalue(&self) -> JSValue {
@@ -186,6 +233,15 @@ impl JSObject {
         let mut exception: JSValueRef = std::ptr::null_mut();
         let jsvalue_ref = unsafe { JSObjectGetProperty(context.inner, self.inner, property_name.inner, &mut exception) };
         JSValue::from(jsvalue_ref)
+    }
+
+    pub fn get_property_names(&mut self, context: &JSContext) -> Vec<String> {
+        let property_name_array = unsafe { JSObjectCopyPropertyNames(context.inner, self.inner) };
+        let num_properties = unsafe { JSPropertyNameArrayGetCount(property_name_array) }; 
+        let all_names = (0..num_properties).map(|property_index| {
+            JSString::from(unsafe { JSPropertyNameArrayGetNameAtIndex(property_name_array, property_index) }).to_string()
+        }).collect::<Vec<_>>();
+        return all_names;
     }
 
     /// Sets the property of an object.
