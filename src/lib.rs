@@ -118,6 +118,7 @@ impl JSValue {
     }
 
     /// Formats this value as a `String`.
+    // TODO: This should be a Result
     pub fn to_string(&self, context: &JSContext) -> String {
         let mut exception: JSValueRef = std::ptr::null_mut();
         let s = unsafe { JSValueToStringCopy(context.inner, self.inner, &mut exception) };
@@ -126,6 +127,7 @@ impl JSValue {
     }
 
     // Tries to convert the value to an object
+    // TODO: This should be a Result
     pub fn to_number(&self, context: &JSContext) -> f64 {
         let mut exception: JSValueRef = std::ptr::null_mut();
         let num = unsafe { JSValueToNumber(context.inner, self.inner, &mut exception) };
@@ -133,6 +135,7 @@ impl JSValue {
     }
 
     // Tries to convert the value to an object
+    // TODO: This should be a Result
     pub fn to_object(&self, context: &JSContext) -> JSObject {
         let mut exception: JSValueRef = std::ptr::null_mut();
         let object_ref = unsafe { JSValueToObject(context.inner, self.inner, &mut exception) };
@@ -213,7 +216,7 @@ impl JSObject {
     pub fn call(
         &self,
         context: &JSContext,
-        this: JSObject,
+        this: JSObject, // TODO: Make Optional
         args: &[JSValue],
     ) -> Result<JSValue, JSValue> {
         let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>();
@@ -331,7 +334,12 @@ impl JSObject {
     }
 
     /// Sets the property of an object.
-    pub fn set_property(&mut self, context: &JSContext, property_name: String, value: JSValue) {
+    pub fn set_property(
+        &self,
+        context: &JSContext,
+        property_name: String,
+        value: JSValue,
+    ) -> Result<(), JSValue> {
         let property_name = JSString::from_utf8(property_name).unwrap();
         let attributes = 0; // TODO
         let mut exception: JSValueRef = std::ptr::null_mut();
@@ -345,6 +353,33 @@ impl JSObject {
                 &mut exception,
             )
         }
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        Ok(())
+    }
+
+    /// Sets the property of an object at a given index
+    pub fn set_property_at_index(
+        &self,
+        context: &JSContext,
+        index: u32,
+        value: JSValue,
+    ) -> Result<(), JSValue> {
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        unsafe {
+            JSObjectSetPropertyAtIndex(
+                context.inner,
+                self.inner,
+                index,
+                value.inner,
+                &mut exception,
+            )
+        }
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        Ok(())
     }
 }
 

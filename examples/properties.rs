@@ -22,11 +22,13 @@ fn foo2<A>(
     function: JSObject,
     this: JSObject,
     args: &[JSValue],
-) -> Result<JSValue, JSValue> where A: Clone {
+) -> Result<JSValue, JSValue>
+where
+    A: Clone,
+{
     println!("hello from Rust land!");
     Ok(JSValue::string(&ctx, "Hey".to_string()).unwrap())
 }
-
 
 fn base() {
     let mut context = JSContext::default();

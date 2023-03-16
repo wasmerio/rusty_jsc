@@ -4,12 +4,10 @@ use syn::{FnArg, Ident, Pat};
 
 fn get_name(func_argument: &FnArg) -> Ident {
     match func_argument {
-        FnArg::Typed(fn_type) => {
-            match &*fn_type.pat {
-                Pat::Ident(ident) => return ident.ident.clone(),
-                _ => {
-                    panic!("Not supported function argument: {:?}", func_argument)
-                }
+        FnArg::Typed(fn_type) => match &*fn_type.pat {
+            Pat::Ident(ident) => return ident.ident.clone(),
+            _ => {
+                panic!("Not supported function argument: {:?}", func_argument)
             }
         },
         _ => {
@@ -29,33 +27,39 @@ pub fn callback(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let this_var_name = get_name(all_inputs.get(2).unwrap());
     let args_var_name = get_name(all_inputs.get(3).unwrap());
     // println!("first_name {:?}", first_name);
-    
+
     let block = &func.block;
     let attrs = func.attrs;
     let result = quote! {
         unsafe extern "C" fn #name(
-            base_ctx: rusty_jsc::private::JSContextRef,
-            function: rusty_jsc::private::JSObjectRef,
-            this_object: rusty_jsc::private::JSObjectRef,
-            argument_count: rusty_jsc::private::size_t,
-            arguments: *const rusty_jsc::private::JSValueRef,
-            mut exception: *mut rusty_jsc::private::JSValueRef,
+            __base_ctx: rusty_jsc::private::JSContextRef,
+            __function: rusty_jsc::private::JSObjectRef,
+            __this_object: rusty_jsc::private::JSObjectRef,
+            __argument_count: rusty_jsc::private::size_t,
+            __arguments: *const rusty_jsc::private::JSValueRef,
+            mut __exception: *mut rusty_jsc::private::JSValueRef,
         ) -> rusty_jsc::private::JSValueRef {
-            let #context_var_name = rusty_jsc::JSContext::from(base_ctx);
-            let #function_var_name: rusty_jsc::JSObject= function.into();
-            let #this_var_name: rusty_jsc::JSObject = this_object.into();
-            let args_refs_slice = unsafe { std::slice::from_raw_parts(arguments, argument_count as _) };
+            let #context_var_name = rusty_jsc::JSContext::from(__base_ctx);
+            let #function_var_name: rusty_jsc::JSObject= __function.into();
+            let #this_var_name: rusty_jsc::JSObject = __this_object.into();
+            let #args_var_name = if __argument_count == 0 {
+                vec![]
+            }
+            else {
+                let __args_refs_slice = unsafe { std::slice::from_raw_parts(__arguments, __argument_count as _) };
+                // drop(arguments, argument_count);
+                // // println!("args_refs_slice {}", args_refs_slice.len());
+                __args_refs_slice.iter().map(|r| (*r).into()).collect::<Vec<_>>()
+            };
+            let #args_var_name: &[JSValue] = &#args_var_name;
+            // println!("ARG 0: {}", #args_var_name[0].to_string(&#context_var_name));
 
-            // // println!("args_refs_slice {}", args_refs_slice.len());
-            let args: Vec<JSValue> = args_refs_slice.iter().map(|r| (*r).into()).collect::<Vec<_>>();
-            let #args_var_name: &[JSValue] = &args;
-            
             let res: Result<JSValue, JSValue> = #block;
             match res {
                 Ok(res) => res.into(),
                 Err(err) => {
-                    *exception = err.into();
-                    let ctx2 = rusty_jsc::JSContext::from(base_ctx);
+                    *__exception = err.into();
+                    let ctx2 = rusty_jsc::JSContext::from(__base_ctx);
                     rusty_jsc::JSValue::undefined(&ctx2).into()
                 }
             }
