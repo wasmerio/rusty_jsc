@@ -1,10 +1,27 @@
-use rusty_jsc::{JSContext, JSValue};
+use rusty_jsc::{JSContext, JSObject, JSValue};
 use rusty_jsc_macros::callback;
 
-// The JavaScript code calls this Rust function.
 #[callback]
-fn foo(_context: JSContext) {
+fn foo(
+    ctx: JSContext,
+    function: JSObject,
+    this: JSObject,
+    args: &[JSValue],
+) -> Result<JSValue, JSValue> {
     println!("hello from Rust land!");
+    Ok(JSValue::string(&ctx, "Returning a string to JS!".to_string()).unwrap())
+}
+
+
+#[callback]
+fn foo2<A>(
+    ctx: JSContext,
+    function: JSObject,
+    this: JSObject,
+    args: &[JSValue],
+) -> Result<JSValue, JSValue> where A: Clone {
+    println!("hello from Rust land!");
+    Ok(JSValue::string(&ctx, "Hey".to_string()).unwrap())
 }
 
 fn main() {

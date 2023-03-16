@@ -1,3 +1,4 @@
+use crate::{JSContext, JSValue};
 use anyhow::Result;
 use rusty_jsc_sys::*;
 use std::ffi::CString;
@@ -24,6 +25,11 @@ impl std::fmt::Display for JSString {
 impl JSString {
     pub fn from(inner: JSStringRef) -> Self {
         Self { inner }
+    }
+
+    /// Calls the object constructor
+    pub fn to_jsvalue(&self, context: &JSContext) -> JSValue {
+        JSValue::from(unsafe { JSValueMakeString(context.inner, self.inner) })
     }
 
     pub fn from_utf8(value: String) -> Result<Self> {

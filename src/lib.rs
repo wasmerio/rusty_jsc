@@ -25,15 +25,18 @@
 
 mod internal;
 
-use crate::internal::JSString;
+pub use crate::internal::JSString;
 use anyhow::Result;
+pub use rusty_jsc_macros::callback;
+pub use rusty_jsc_sys::JSObjectCallAsFunctionCallback;
 use rusty_jsc_sys::*;
 use std::fmt;
-pub use rusty_jsc_macros::callback;
-
+pub mod private {
+    pub use rusty_jsc_sys::*;
+}
 
 /// A JavaScript value.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JSValue {
     inner: JSValueRef,
 }
@@ -99,6 +102,11 @@ impl JSValue {
         unsafe { JSValueIsBoolean(context.inner, self.inner) }
     }
 
+    /// Checks if this value is `Array`.
+    pub fn is_array(&self, context: &JSContext) -> bool {
+        unsafe { JSValueIsArray(context.inner, self.inner) }
+    }
+
     /// Checks if this value is `number`.
     pub fn is_number(&self, context: &JSContext) -> bool {
         unsafe { JSValueIsNumber(context.inner, self.inner) }
@@ -132,9 +140,8 @@ impl JSValue {
     }
 }
 
-
 /// A JavaScript object.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JSObject {
     inner: JSObjectRef,
 }
@@ -146,7 +153,7 @@ impl Drop for JSObject {
 }
 
 #[no_mangle]
-pub extern "C" fn id(a: *mut std::ffi::c_void, b: *mut std::ffi::c_void) { }
+pub extern "C" fn id(a: *mut std::ffi::c_void, b: *mut std::ffi::c_void) {}
 
 impl JSObject {
     /// Wraps a `JSObject` from a `JSObjectRef`.
@@ -160,15 +167,20 @@ impl JSObject {
         Self::from(o_ref)
     }
 
-    pub fn new_function_with_callback(context: &JSContext, name: String, callback: JSObjectCallAsFunctionCallback) -> Self {
+    pub fn new_function_with_callback(
+        context: &JSContext,
+        name: String,
+        callback: JSObjectCallAsFunctionCallback,
+    ) -> Self {
         let name = JSString::from_utf8(name).unwrap();
-        let o_ref = unsafe { JSObjectMakeFunctionWithCallback(context.inner, name.inner, callback) };
+        let o_ref =
+            unsafe { JSObjectMakeFunctionWithCallback(context.inner, name.inner, callback) };
         Self::from(o_ref)
         // JSObjectMakeFunction(ctx, name, parameterCount, parameterNames, body, sourceURL, startingLineNumber, exception)
     }
 
     /// Calls the object constructor
-    pub fn construct(&mut self, context: &JSContext, args: &[JSValue]) -> Result<Self, JSValue> {
+    pub fn construct(&self, context: &JSContext, args: &[JSValue]) -> Result<Self, JSValue> {
         let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>();
         let mut exception: JSValueRef = std::ptr::null_mut();
 
@@ -177,7 +189,13 @@ impl JSObject {
         // let args_back = args_refs_slice.iter().map(|r| JSValue::from(*r)).collect::<Vec<_>>();
         // println!("CONSTRUCT LEN {} {:?} {}", args.len(), args_refs, args_back[0].to_string(&context));
         let result = unsafe {
-            JSObjectCallAsConstructor(context.inner, self.inner, args.len() as _,  args_refs.as_slice().as_ptr(), &mut exception)
+            JSObjectCallAsConstructor(
+                context.inner,
+                self.inner,
+                args.len() as _,
+                args_refs.as_slice().as_ptr(),
+                &mut exception,
+            )
         };
         if !exception.is_null() {
             return Err(JSValue::from(exception));
@@ -192,11 +210,23 @@ impl JSObject {
     }
 
     /// Call the object as if it a function
-    pub fn call(&mut self, context: &JSContext, this: JSObject, args: &[JSValue]) -> Result<JSValue, JSValue> {
+    pub fn call(
+        &self,
+        context: &JSContext,
+        this: JSObject,
+        args: &[JSValue],
+    ) -> Result<JSValue, JSValue> {
         let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>();
         let mut exception: JSValueRef = std::ptr::null_mut();
         let result = unsafe {
-            JSObjectCallAsFunction(context.inner, self.inner, this.inner, args.len() as _,  args_refs.as_slice().as_ptr(), &mut exception)
+            JSObjectCallAsFunction(
+                context.inner,
+                self.inner,
+                this.inner,
+                args.len() as _,
+                args_refs.as_slice().as_ptr(),
+                &mut exception,
+            )
         };
         if !exception.is_null() {
             return Err(JSValue::from(exception));
@@ -207,17 +237,28 @@ impl JSObject {
         Ok(JSValue::from(result))
     }
 
-    
-
     /// Calls the object constructor
     pub fn to_jsvalue(&self) -> JSValue {
         JSValue::from(self.inner)
     }
 
-    pub fn create_typed_array_with_bytes(context: &JSContext, bytes: &mut [u8]) -> Result<Self, JSValue> {
+    pub fn create_typed_array_with_bytes(
+        context: &JSContext,
+        bytes: &mut [u8],
+    ) -> Result<Self, JSValue> {
         let deallocator_ctx = std::ptr::null_mut();
         let mut exception: JSValueRef = std::ptr::null_mut();
-        let result = unsafe { JSObjectMakeTypedArrayWithBytesNoCopy(context.inner, JSTypedArrayType_kJSTypedArrayTypeUint8Array, bytes.as_mut_ptr() as _, bytes.len() as _, None, deallocator_ctx, &mut exception) };
+        let result = unsafe {
+            JSObjectMakeTypedArrayWithBytesNoCopy(
+                context.inner,
+                JSTypedArrayType_kJSTypedArrayTypeUint8Array,
+                bytes.as_mut_ptr() as _,
+                bytes.len() as _,
+                None,
+                deallocator_ctx,
+                &mut exception,
+            )
+        };
         if !exception.is_null() {
             return Err(JSValue::from(exception));
         }
@@ -228,20 +269,65 @@ impl JSObject {
     }
 
     /// Gets the property of an object.
-    pub fn get_property(&mut self, context: &JSContext, property_name: String) -> JSValue {
+    pub fn get_property(&self, context: &JSContext, property_name: String) -> JSValue {
         let property_name = JSString::from_utf8(property_name).unwrap();
         let mut exception: JSValueRef = std::ptr::null_mut();
-        let jsvalue_ref = unsafe { JSObjectGetProperty(context.inner, self.inner, property_name.inner, &mut exception) };
+        let jsvalue_ref = unsafe {
+            JSObjectGetProperty(
+                context.inner,
+                self.inner,
+                property_name.inner,
+                &mut exception,
+            )
+        };
         JSValue::from(jsvalue_ref)
+    }
+
+    /// Gets the property of an object at a given index
+    pub fn get_property_at_index(
+        &self,
+        context: &JSContext,
+        property_index: u32,
+    ) -> Result<JSValue, JSValue> {
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let property = unsafe {
+            JSObjectGetPropertyAtIndex(context.inner, self.inner, property_index, &mut exception)
+        };
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        Ok(JSValue::from(property))
     }
 
     pub fn get_property_names(&mut self, context: &JSContext) -> Vec<String> {
         let property_name_array = unsafe { JSObjectCopyPropertyNames(context.inner, self.inner) };
-        let num_properties = unsafe { JSPropertyNameArrayGetCount(property_name_array) }; 
-        let all_names = (0..num_properties).map(|property_index| {
-            JSString::from(unsafe { JSPropertyNameArrayGetNameAtIndex(property_name_array, property_index) }).to_string()
-        }).collect::<Vec<_>>();
+        let num_properties = unsafe { JSPropertyNameArrayGetCount(property_name_array) };
+        let all_names = (0..num_properties)
+            .map(|property_index| {
+                JSString::from(unsafe {
+                    JSPropertyNameArrayGetNameAtIndex(property_name_array, property_index)
+                })
+                .to_string()
+            })
+            .collect::<Vec<_>>();
         return all_names;
+    }
+
+    // Get the object as an array buffer
+    pub fn get_array_buffer(&mut self, context: &JSContext) -> Result<&[u8], JSValue> {
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let arr_ptr =
+            unsafe { JSObjectGetArrayBufferBytesPtr(context.inner, self.inner, &mut exception) };
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        let arr_len =
+            unsafe { JSObjectGetArrayBufferByteLength(context.inner, self.inner, &mut exception) };
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        let slice = unsafe { std::slice::from_raw_parts(arr_ptr as _, arr_len as usize) };
+        Ok(slice)
     }
 
     /// Sets the property of an object.
@@ -259,6 +345,29 @@ impl JSObject {
                 &mut exception,
             )
         }
+    }
+}
+
+impl From<JSObjectRef> for JSObject {
+    fn from(obj: JSObjectRef) -> Self {
+        JSObject::from(obj)
+    }
+}
+
+impl From<JSValueRef> for JSValue {
+    fn from(val: JSValueRef) -> Self {
+        JSValue::from(val)
+    }
+}
+
+impl Into<JSValueRef> for JSValue {
+    fn into(self) -> JSValueRef {
+        self.inner
+    }
+}
+impl Into<JSObjectRef> for JSObject {
+    fn into(self) -> JSObjectRef {
+        self.inner
     }
 }
 
@@ -311,6 +420,12 @@ pub struct JSContext {
     inner: JSContextRef,
     vm: JSVirtualMachine,
     exception: Option<JSValue>,
+}
+
+impl fmt::Debug for JSContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("JSContext").finish()
+    }
 }
 
 impl Default for JSContext {
