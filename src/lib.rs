@@ -25,6 +25,8 @@
 
 mod internal;
 
+// #[macro_export]
+mod closure;
 pub use crate::internal::JSString;
 use anyhow::Result;
 pub use rusty_jsc_macros::callback;
@@ -34,6 +36,8 @@ use std::fmt;
 pub mod private {
     pub use rusty_jsc_sys::*;
 }
+
+// pub use crate::closure::callback_closure;
 
 /// A JavaScript value.
 #[derive(Debug, Clone, PartialEq, Eq)]
