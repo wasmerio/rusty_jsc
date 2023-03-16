@@ -170,6 +170,21 @@ impl JSObject {
         Self::from(o_ref)
     }
 
+    /// Create a new Array Object with the given arguments
+    pub fn new_array(context: &JSContext, args: &[JSValue]) -> Self {
+        let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>();
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let o_ref = unsafe {
+            JSObjectMakeArray(
+                context.inner,
+                args.len() as _,
+                args_refs.as_slice().as_ptr(),
+                &mut exception,
+            )
+        };
+        Self::from(o_ref)
+    }
+
     pub fn new_function_with_callback(
         context: &JSContext,
         name: String,
