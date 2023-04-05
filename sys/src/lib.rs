@@ -282,6 +282,17 @@ pub struct JSStaticValue {
     pub attributes: JSPropertyAttributes,
 }
 
+impl Default for JSStaticValue {
+    fn default() -> Self {
+        Self {
+            name: std::ptr::null(),
+            getProperty: None,
+            setProperty: None,
+            attributes: 0,
+        }
+    }
+}
+
 #[test]
 fn bindgen_test_layout_JSStaticValue() {
     assert_eq!(
@@ -371,6 +382,16 @@ pub struct JSStaticFunction {
     pub attributes: JSPropertyAttributes,
 }
 
+impl Default for JSStaticFunction {
+    fn default() -> Self {
+        Self {
+            name: std::ptr::null(),
+            callAsFunction: None,
+            attributes: 0,
+        }
+    }
+}
+
 #[test]
 fn bindgen_test_layout_JSStaticFunction() {
     assert_eq!(
@@ -437,6 +458,7 @@ fn bindgen_test_layout_JSStaticFunction() {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct JSClassDefinition {
     pub version: ::std::os::raw::c_int,
     pub attributes: JSClassAttributes,
@@ -765,6 +787,27 @@ extern "C" {
     pub fn JSClassCreate(definition: *const JSClassDefinition) -> JSClassRef;
     pub fn JSClassRetain(jsClass: JSClassRef) -> JSClassRef;
     pub fn JSClassRelease(jsClass: JSClassRef);
+
+    /// Creates a JavaScript object.
+    ///
+    /// # Parameters
+    /// * ctx The execution context to use.
+    /// * jsClass The JSClass to assign to the object. Pass NULL to use the
+    ///           default object class.
+    /// * data A void* to set as the object's private data. Pass NULL to
+    ///        specify no private data.
+    ///
+    /// # Result
+    /// A JSObject with the given class and private data.
+    ///
+    /// # Notes
+    /// The default object class does not allocate storage for private data, so
+    /// you must provide a non-NULL jsClass to JSObjectMake if you want your
+    /// object to be able to store private data.
+    ///
+    /// Data is set on the created object before the intialize methods in its
+    /// class chain are called. This enables the initialize methods to retrieve
+    /// and manipulate data through JSObjectGetPrivate.
     pub fn JSObjectMake(
         ctx: JSContextRef,
         jsClass: JSClassRef,

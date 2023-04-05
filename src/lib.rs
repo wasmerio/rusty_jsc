@@ -25,14 +25,29 @@
 
 mod internal;
 
-use crate::internal::JSString;
+pub use crate::internal::JSString;
 use anyhow::Result;
 use rusty_jsc_sys::*;
 
 /// A JavaScript value.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct JSValue {
     inner: JSValueRef,
+}
+
+impl From<JSObject> for JSValue {
+    fn from(js_object: JSObject) -> Self {
+        // The two objects are very simple and will not be differents in any
+        // cases.
+        unsafe { std::mem::transmute(js_object) }
+    }
+}
+
+impl From<JSValueRef> for JSValue {
+    /// Wraps a `JSValue` from a `JSValueRef`.
+    fn from(inner: JSValueRef) -> Self {
+        Self { inner }
+    }
 }
 
 impl Drop for JSValue {
@@ -42,9 +57,8 @@ impl Drop for JSValue {
 }
 
 impl JSValue {
-    /// Wraps a `JSValue` from a `JSValueRef`.
-    fn from(inner: JSValueRef) -> Self {
-        Self { inner }
+    pub fn get_ref(&self) -> JSValueRef {
+        self.inner
     }
 
     /// Creates an `undefined` value.
@@ -68,16 +82,18 @@ impl JSValue {
     }
 
     /// Creates a `string` value.
-    pub fn string(context: &JSContext, value: String) -> Result<JSValue> {
-        let value = JSString::from_utf8(value)?;
+    pub fn string(context: &JSContext, value: impl ToString) -> Result<JSValue> {
+        let value = JSString::from_utf8(value.to_string())?;
         Ok(JSValue::from(unsafe {
             JSValueMakeString(context.inner, value.inner)
         }))
     }
 
+    /// Creates a function callback
     pub fn callback(context: &JSContext, callback: JSObjectCallAsFunctionCallback) -> JSValue {
         let name = JSString::from_utf8("".to_string()).unwrap();
-        let func = unsafe { JSObjectMakeFunctionWithCallback(context.inner, name.inner, callback) };
+        let func: JSValueRef =
+            unsafe { JSObjectMakeFunctionWithCallback(context.inner, name.inner, callback) };
         JSValue::from(func)
     }
 
@@ -106,6 +122,16 @@ impl JSValue {
         unsafe { JSValueIsString(context.inner, self.inner) }
     }
 
+    /// Checks if this value is `date`.
+    pub fn is_date(&self, context: &JSContext) -> bool {
+        unsafe { JSValueIsDate(context.inner, self.inner) }
+    }
+
+    /// Checks if this value is `date`.
+    pub fn is_symbol(&self, context: &JSContext) -> bool {
+        unsafe { JSValueIsSymbol(context.inner, self.inner) }
+    }
+
     /// Formats this value as a `String`.
     pub fn to_string(&self, context: &JSContext) -> String {
         let mut exception: JSValueRef = std::ptr::null_mut();
@@ -121,6 +147,21 @@ pub struct JSObject {
     inner: JSObjectRef,
 }
 
+impl From<JSValue> for JSObject {
+    fn from(js_value: JSValue) -> Self {
+        // The two objects are very simple and will not be differents in any
+        // cases.
+        unsafe { std::mem::transmute(js_value) }
+    }
+}
+
+impl From<JSObjectRef> for JSObject {
+    /// Wraps a `JSObject` from a `JSObjectRef`.
+    fn from(inner: JSObjectRef) -> Self {
+        Self { inner }
+    }
+}
+
 impl Drop for JSObject {
     fn drop(&mut self) {
         // TODO
@@ -128,15 +169,15 @@ impl Drop for JSObject {
 }
 
 impl JSObject {
-    /// Wraps a `JSObject` from a `JSObjectRef`.
-    fn from(inner: JSObjectRef) -> Self {
-        Self { inner }
-    }
-
     /// Sets the property of an object.
-    pub fn set_property(&mut self, context: &JSContext, property_name: String, value: JSValue) {
-        let property_name = JSString::from_utf8(property_name).unwrap();
-        let attributes = 0; // TODO
+    pub fn set_property(
+        &mut self,
+        context: &JSContext,
+        property_name: impl ToString,
+        value: JSValue,
+    ) {
+        let property_name = JSString::from_utf8(property_name.to_string()).unwrap();
+        let attributes = kJSPropertyAttributeDontDelete; // TODO
         let mut exception: JSValueRef = std::ptr::null_mut();
         unsafe {
             JSObjectSetProperty(
@@ -147,6 +188,46 @@ impl JSObject {
                 attributes,
                 &mut exception,
             )
+        }
+    }
+
+    pub fn get_property(&mut self, context: &JSContext, property_name: String) -> Option<JSValue> {
+        let property_name = JSString::from_utf8(property_name).unwrap();
+        let exception: JSValueRef = std::ptr::null_mut();
+        let js_value = unsafe {
+            JSObjectGetProperty(
+                context.inner,
+                self.inner,
+                property_name.inner,
+                exception as *mut _,
+            )
+        };
+        if !js_value.is_null() {
+            Some(JSValue::from(js_value))
+        } else {
+            None
+        }
+    }
+
+    pub fn class(
+        context: &JSContext,
+        class_name: impl ToString,
+        constructor: JSObjectCallAsConstructorCallback,
+    ) -> JSObject {
+        let mut class_definition = unsafe { kJSClassDefinitionEmpty };
+        class_definition.className = class_name.to_string().as_bytes().as_ptr() as _;
+        class_definition.callAsConstructor = constructor;
+        // TODO: we should manage the attributes and static parameters (even if it
+        //       looks broken for the version 4.0)
+        // class_definition.attributes = 0;
+        // class_definition.staticValues = values;
+        // class_definition.staticFunctions = log;
+
+        // TODO: manage private datas if any, we give std::ptr::null_mut() for the
+        //       moment.
+        unsafe {
+            let class = JSClassCreate([class_definition].as_ptr() as _);
+            JSObjectMake(context.get_ref(), class, std::ptr::null_mut()).into()
         }
     }
 }
@@ -217,6 +298,11 @@ impl JSContext {
             vm,
             exception: None,
         }
+    }
+
+    /// Get inner opaque object.
+    pub fn get_ref(&self) -> JSContextRef {
+        self.inner
     }
 
     /// Create a new `JSContext` object.
