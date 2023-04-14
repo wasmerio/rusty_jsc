@@ -147,11 +147,17 @@ impl JSValue {
     }
 }
 
+unsafe impl Send for JSValue {}
+unsafe impl Sync for JSValue {}
+
 /// A JavaScript object.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JSObject {
     inner: JSObjectRef,
 }
+
+unsafe impl Send for JSObject {}
+unsafe impl Sync for JSObject {}
 
 impl Drop for JSObject {
     fn drop(&mut self) {
@@ -290,6 +296,41 @@ impl JSObject {
         Ok(Self::from(result))
     }
 
+    pub fn create_typed_array_from_buffer(
+        context: &JSContext,
+        buffer: JSObject,
+    ) -> Result<Self, JSValue> {
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let result = unsafe {
+            JSObjectMakeTypedArrayWithArrayBuffer(
+                context.inner,
+                JSTypedArrayType_kJSTypedArrayTypeUint8Array,
+                buffer.inner,
+                &mut exception,
+            )
+        };
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        if result.is_null() {
+            panic!("Can't create the typed array from buffer");
+        }
+        Ok(Self::from(result))
+    }
+
+    pub fn get_typed_array_buffer(&self, context: &JSContext) -> Result<&mut [u8], JSValue> {
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let arr_ptr =
+            unsafe { JSObjectGetTypedArrayBytesPtr(context.inner, self.inner, &mut exception) };
+        let arr_len =
+            unsafe { JSObjectGetTypedArrayLength(context.inner, self.inner, &mut exception) };
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        let slice = unsafe { std::slice::from_raw_parts_mut(arr_ptr as _, arr_len as usize) };
+        Ok(slice)
+    }
+
     /// Gets the property of an object.
     pub fn get_property(&self, context: &JSContext, property_name: String) -> JSValue {
         let property_name = JSString::from_utf8(property_name).unwrap();
@@ -336,7 +377,7 @@ impl JSObject {
     }
 
     // Get the object as an array buffer
-    pub fn get_array_buffer(&mut self, context: &JSContext) -> Result<&[u8], JSValue> {
+    pub fn get_array_buffer(&mut self, context: &JSContext) -> Result<&mut [u8], JSValue> {
         let mut exception: JSValueRef = std::ptr::null_mut();
         let arr_ptr =
             unsafe { JSObjectGetArrayBufferBytesPtr(context.inner, self.inner, &mut exception) };
@@ -348,7 +389,7 @@ impl JSObject {
         if !exception.is_null() {
             return Err(JSValue::from(exception));
         }
-        let slice = unsafe { std::slice::from_raw_parts(arr_ptr as _, arr_len as usize) };
+        let slice = unsafe { std::slice::from_raw_parts_mut(arr_ptr as _, arr_len as usize) };
         Ok(slice)
     }
 
