@@ -139,20 +139,17 @@ impl JSValue {
         let s = JSString::from(s);
         s.to_string()
     }
+
+    /// Convert value into object
+    pub fn to_object(self, context: &JSContext) -> JSObject {
+        unsafe { JSValueToObject(context.inner, self.inner, std::ptr::null_mut()).into() }
+    }
 }
 
 /// A JavaScript object.
 #[derive(Debug)]
 pub struct JSObject {
     inner: JSObjectRef,
-}
-
-impl From<JSValue> for JSObject {
-    fn from(js_value: JSValue) -> Self {
-        // The two objects are very simple and will not be differents in any
-        // cases.
-        unsafe { std::mem::transmute(js_value) }
-    }
 }
 
 impl From<JSObjectRef> for JSObject {
