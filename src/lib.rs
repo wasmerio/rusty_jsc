@@ -227,7 +227,7 @@ impl From<JSClassRef> for JSClass {
     }
 }
 
-pub struct JSObjectDefault;
+pub struct JSObjectGeneric;
 
 impl<T> JSObject<T> {
     /// Sets the property of an object.
@@ -407,8 +407,8 @@ impl JSContext {
     }
 
     /// Returns the context global object.
-    pub fn get_global_object<T>(&self) -> JSObject<T> {
-        JSObject::<T>::from(unsafe { JSContextGetGlobalObject(self.inner) })
+    pub fn get_global_object(&self) -> JSObject<JSObjectGeneric> {
+        JSObject::<JSObjectGeneric>::from(unsafe { JSContextGetGlobalObject(self.inner) })
     }
 
     /// Evaluate the script.
