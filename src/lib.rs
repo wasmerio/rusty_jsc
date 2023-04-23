@@ -25,6 +25,8 @@
 
 mod internal;
 
+use std::panic;
+
 pub use crate::internal::JSString;
 use anyhow::Result;
 use rusty_jsc_sys::*;
@@ -45,6 +47,28 @@ impl Default for JSValue {
 
 impl<T> From<&JSObject<T>> for JSValue {
     fn from(js_object: &JSObject<T>) -> Self {
+        // The two objects are very simple and will not be differents in any
+        // cases.
+        Self {
+            inner: unsafe { std::mem::transmute(js_object.inner) },
+        }
+    }
+}
+
+trait SafelyConvertibleObjects {}
+impl SafelyConvertibleObjects for JSObject<JSObjectGeneric> {}
+impl From<JSObject<JSObjectGeneric>> for JSValue {
+    fn from(js_object: JSObject) -> Self {
+        // The two objects are very simple and will not be differents in any
+        // cases.
+        Self {
+            inner: unsafe { std::mem::transmute(js_object.inner) },
+        }
+    }
+}
+
+impl From<JSObject<JSPromise>> for JSValue {
+    fn from(js_object: JSObject<JSPromise>) -> Self {
         // The two objects are very simple and will not be differents in any
         // cases.
         Self {
@@ -151,7 +175,7 @@ impl JSValue {
     }
 
     /// Convert value into object
-    pub fn to_object<T>(self, context: &JSContext) -> JSObject<T> {
+    pub fn to_object(self, context: &JSContext) -> JSObject<JSObjectGeneric> {
         unsafe { JSValueToObject(context.inner, self.inner, std::ptr::null_mut()).into() }
     }
 
@@ -163,18 +187,26 @@ impl JSValue {
 
 /// A JavaScript object.
 #[derive(Debug, Clone)]
-pub struct JSObject<T> {
+pub struct JSObject<T = JSObjectGeneric> {
     inner: JSObjectRef,
     /// The data is never read, but is used to keep track if the JSObject is
     /// eventually constructed as a Class (or anything that should be released
     /// on drop)
-    _data: Option<T>,
+    data: Option<T>,
 }
+
+// It is usually forbidden to keep track of JSObject references and JSValues if
+// they are not retained before... Here we assume that JSC wont garbage collect
+// any function because there always is a reference to a resolve or a reject
+// function until a resolve or a reject function has been called.
+//
+// That is not valable for other JSObject<> types.
+unsafe impl Send for JSObject<JSPromise> {}
 
 impl<T> From<JSObjectRef> for JSObject<T> {
     /// Wraps a `JSObject` from a `JSObjectRef`.
     fn from(inner: JSObjectRef) -> Self {
-        Self { inner, _data: None }
+        Self { inner, data: None }
     }
 }
 
@@ -208,6 +240,15 @@ impl JSClass {
             class
         }
     }
+
+    pub fn make_object(&self, context: &JSContext) -> JSObject<JSObjectGeneric> {
+        unsafe {
+            JSObject {
+                inner: JSObjectMake(context.get_ref(), self.inner, std::ptr::null_mut()),
+                data: None,
+            }
+        }
+    }
 }
 
 impl Drop for JSClass {
@@ -227,6 +268,7 @@ impl From<JSClassRef> for JSClass {
     }
 }
 
+#[derive(Clone)]
 pub struct JSObjectGeneric;
 
 impl<T> JSObject<T> {
@@ -297,8 +339,72 @@ impl<T> JSObject<T> {
         unsafe {
             JSObject {
                 inner: JSObjectMake(context.get_ref(), class, std::ptr::null_mut()),
-                _data: Some(class.into()),
+                data: Some(class.into()),
             }
+        }
+    }
+
+    pub fn promise(context: &mut JSContext) -> JSObject<JSPromise> {
+        // TODO: not sure if I'm supposed to protect these from garbage collecting
+        //       The article https://devsday.ru/blog/details/114430 could be interesting
+        let mut resolve = JSObject::<JSObjectGeneric>::make(context);
+        let mut reject = JSObject::<JSObjectGeneric>::make(context);
+        let inner = unsafe {
+            JSObjectMakeDeferredPromise(
+                context.get_ref(),
+                &mut resolve.inner,
+                &mut reject.inner,
+                std::ptr::null_mut(),
+            )
+        };
+        JSObject::<JSPromise> {
+            inner,
+            data: Some(JSPromise {
+                resolve,
+                _reject: reject,
+                context: context.get_ref(),
+            }),
+        }
+    }
+
+    pub fn make(context: &mut JSContext) -> JSObject {
+        unsafe { JSObjectMake(context.inner, std::ptr::null_mut(), std::ptr::null_mut()).into() }
+    }
+}
+#[derive(Clone)]
+pub struct JSPromise {
+    resolve: JSObject,
+    _reject: JSObject,
+    context: JSContextRef,
+    // TODO: exception: Option<JSValueRef>
+    // exception are almost never managed in this library and
+    // it will be neat to do something about.
+}
+
+impl JSObject<JSPromise> {
+    pub fn resolve(self, arguments: &[JSValue]) {
+        let data = self.data.unwrap();
+        unsafe {
+            JSObjectCallAsFunction(
+                data.context,
+                data.resolve.inner,
+                self.inner, // TODO: need some investigation of what is the this.
+                arguments.len() as _,
+                arguments
+                    .iter()
+                    .map(|s| s.inner)
+                    .collect::<Vec<JSValueRef>>()
+                    .as_ptr(),
+                std::ptr::null_mut(),
+            )
+        };
+    }
+
+    pub fn context(&self) -> JSContext {
+        if let Some(data) = &self.data {
+            data.context.into()
+        } else {
+            panic!("unexpected empty promise")
         }
     }
 }
