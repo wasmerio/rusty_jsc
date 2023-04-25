@@ -6,14 +6,9 @@ fn main() {
     let hello = JSValue::string(&context, "hello, world!".to_string()).unwrap();
     global.set_property(&context, "hello".to_string(), hello);
     match context.evaluate_script("hello", 1) {
-        Some(value) => {
-            println!("{}", value.to_string(&context));
-        }
-        None => {
-            println!(
-                "Uncaught: {}",
-                context.get_exception().unwrap().to_string(&context)
-            )
+        Ok(value) => println!("{}", value.to_string(&context)),
+        Err(err) => {
+            println!("Uncaught: {}", err.to_string(&context));
         }
     }
 }

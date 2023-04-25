@@ -61,6 +61,7 @@ pub struct OpaqueJSValue {
 pub type JSValueRef = *const OpaqueJSValue;
 
 pub type JSObjectRef = *mut OpaqueJSValue;
+
 extern "C" {
 
     pub fn JSEvaluateScript(
@@ -847,6 +848,21 @@ extern "C" {
         arguments: *const JSValueRef,
         exception: *mut JSValueRef,
     ) -> JSObjectRef;
+    /// Creates a JavaScript promise object by invoking the provided executor.
+    ///
+    /// # Parameters
+    /// * ctx The execution context to use.
+    /// * resolve A pointer to a JSObjectRef in which to store the resolve
+    ///   function for the new promise. Pass NULL if you do not care to store
+    ///   the resolve callback.
+    /// * reject A pointer to a JSObjectRef in which to store the reject
+    ///   function for the new promise. Pass NULL if you do not care to store
+    ///   the reject callback.
+    /// * exception A pointer to a JSValueRef in which to store an exception, if
+    ///   any. Pass NULL if you do not care to store an exception.
+    ///
+    /// # Return
+    /// A JSObject that is a promise or NULL if an exception occurred.
     pub fn JSObjectMakeDeferredPromise(
         ctx: JSContextRef,
         resolve: *mut JSObjectRef,
@@ -932,6 +948,23 @@ extern "C" {
     pub fn JSObjectGetPrivate(object: JSObjectRef) -> *mut ::std::os::raw::c_void;
     pub fn JSObjectSetPrivate(object: JSObjectRef, data: *mut ::std::os::raw::c_void) -> bool;
     pub fn JSObjectIsFunction(ctx: JSContextRef, object: JSObjectRef) -> bool;
+    /// Calls an object as a function.
+    ///
+    /// # Parameters
+    /// * ctx The execution context to use.
+    /// * object The JSObject to call as a function.
+    /// * thisObject The object to use as "this," or NULL to use the global
+    ///   object as "this."
+    /// * argumentCount An integer count of the number of arguments in
+    ///   arguments.
+    /// * arguments A JSValue array of arguments to pass to the function. Pass
+    ///   NULL if argumentCount is 0.
+    /// * exception A pointer to a JSValueRef in which to store an exception, if
+    ///   any. Pass NULL if you do not care to store an exception.
+    ///
+    /// # Result
+    /// The JSValue that results from calling object as a function, or NULL if
+    /// an exception is thrown or object is not a function.
     pub fn JSObjectCallAsFunction(
         ctx: JSContextRef,
         object: JSObjectRef,

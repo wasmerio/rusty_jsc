@@ -13,14 +13,9 @@ fn main() {
     let mut global = context.get_global_object();
     global.set_property(&context, "foo".to_string(), callback);
     match context.evaluate_script("foo()", 1) {
-        Some(value) => {
-            println!("{}", value.to_string(&context));
-        }
-        None => {
-            println!(
-                "Uncaught: {}",
-                context.get_exception().unwrap().to_string(&context)
-            )
+        Ok(value) => println!("{}", value.to_string(&context)),
+        Err(err) => {
+            println!("Uncaught: {}", err.to_string(&context));
         }
     }
 }
