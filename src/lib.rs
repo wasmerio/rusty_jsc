@@ -37,30 +37,13 @@ pub struct JSValue {
     inner: JSValueRef,
 }
 
-impl Default for JSValue {
-    fn default() -> Self {
-        Self {
-            inner: std::ptr::null_mut(),
-        }
-    }
-}
-
-impl<T> From<&JSObject<T>> for JSValue {
-    fn from(js_object: &JSObject<T>) -> Self {
-        // The two objects are very simple and will not be differents in any
-        // cases.
-        Self {
-            inner: unsafe { std::mem::transmute(js_object.inner) },
-        }
-    }
-}
-
-trait SafelyConvertibleObjects {}
-impl SafelyConvertibleObjects for JSObject<JSObjectGeneric> {}
 impl From<JSObject<JSObjectGeneric>> for JSValue {
     fn from(js_object: JSObject) -> Self {
         // The two objects are very simple and will not be differents in any
         // cases.
+
+        // Note: this is also the case of a JSPromise since we don't need
+        // to protect or retain anything.
         Self {
             inner: unsafe { std::mem::transmute(js_object.inner) },
         }
@@ -69,8 +52,6 @@ impl From<JSObject<JSObjectGeneric>> for JSValue {
 
 impl From<JSObject<JSPromise>> for JSValue {
     fn from(js_object: JSObject<JSPromise>) -> Self {
-        // The two objects are very simple and will not be differents in any
-        // cases.
         Self {
             inner: unsafe { std::mem::transmute(js_object.inner) },
         }
@@ -81,12 +62,6 @@ impl From<JSValueRef> for JSValue {
     /// Wraps a `JSValue` from a `JSValueRef`.
     fn from(inner: JSValueRef) -> Self {
         Self { inner }
-    }
-}
-
-impl Drop for JSValue {
-    fn drop(&mut self) {
-        // TODO
     }
 }
 
@@ -161,7 +136,7 @@ impl JSValue {
         unsafe { JSValueIsDate(context.inner, self.inner) }
     }
 
-    /// Checks if this value is `date`.
+    /// Checks if this value is `symbol`.
     pub fn is_symbol(&self, context: &JSContext) -> bool {
         unsafe { JSValueIsSymbol(context.inner, self.inner) }
     }
@@ -174,34 +149,44 @@ impl JSValue {
         s.to_string()
     }
 
-    /// Convert value into object
+    /// Convert value into an object
     pub fn to_object(self, context: &JSContext) -> JSObject<JSObjectGeneric> {
         unsafe { JSValueToObject(context.inner, self.inner, std::ptr::null_mut()).into() }
+    }
+
+    /// Convert value into a protected object (protected from garbage collection)
+    pub fn to_protected_object(self, context: &JSContext) -> JSObject<JSProtected> {
+        unsafe {
+            JSValueProtect(context.inner, self.inner);
+            JSObject::<JSProtected> {
+                inner: self.inner as _,
+                data: Some(JSProtected {
+                    inner: self.inner,
+                    context: context.inner,
+                }),
+            }
+        }
     }
 
     /// Get Rust boolean value from JSValue.
     pub fn to_boolean(&self, context: &JSContext) -> bool {
         unsafe { JSValueToBoolean(context.inner, self.inner) }
     }
+
+    /// Get Rust number value from JSValue.
+    pub fn to_number(&self, context: &JSContext) -> f64 {
+        unsafe { JSValueToNumber(context.inner, self.inner, std::ptr::null_mut()) }
+    }
 }
 
 /// A JavaScript object.
 #[derive(Debug, Clone)]
 pub struct JSObject<T = JSObjectGeneric> {
-    inner: JSObjectRef,
-    /// The data is never read, but is used to keep track if the JSObject is
-    /// eventually constructed as a Class (or anything that should be released
-    /// on drop)
+    pub inner: JSObjectRef,
+    /// The data is used to keep track if the JSObject is eventually constructed
+    /// as a class or a protected value
     data: Option<T>,
 }
-
-// It is usually forbidden to keep track of JSObject references and JSValues if
-// they are not retained before... Here we assume that JSC wont garbage collect
-// any function because there always is a reference to a resolve or a reject
-// function until a resolve or a reject function has been called.
-//
-// That is not valable for other JSObject<> types.
-unsafe impl Send for JSObject<JSPromise> {}
 
 impl<T> From<JSObjectRef> for JSObject<T> {
     /// Wraps a `JSObject` from a `JSObjectRef`.
@@ -308,6 +293,7 @@ impl<T> JSObject<T> {
         }
     }
 
+    /// Get an object property.
     pub fn get_property(
         &self,
         context: &JSContext,
@@ -330,6 +316,7 @@ impl<T> JSObject<T> {
         }
     }
 
+    /// Creates a new class.
     pub fn class(
         context: &mut JSContext,
         class_name: impl ToString,
@@ -344,8 +331,9 @@ impl<T> JSObject<T> {
         }
     }
 
+    /// Creates a new deffered promise.
     pub fn promise(context: &mut JSContext) -> JSObject<JSPromise> {
-        // TODO: not sure if I'm supposed to protect these from garbage collecting
+        // TODO: not sure if I'm supposed to protect these function from garbage collecting
         //       The article https://devsday.ru/blog/details/114430 could be interesting
         let mut resolve = JSObject::<JSObjectGeneric>::make(context);
         let mut reject = JSObject::<JSObjectGeneric>::make(context);
@@ -361,7 +349,7 @@ impl<T> JSObject<T> {
             inner,
             data: Some(JSPromise {
                 resolve,
-                _reject: reject,
+                reject,
                 context: context.get_ref(),
             }),
         }
@@ -374,7 +362,7 @@ impl<T> JSObject<T> {
 #[derive(Clone)]
 pub struct JSPromise {
     resolve: JSObject,
-    _reject: JSObject,
+    reject: JSObject,
     context: JSContextRef,
     // TODO: exception: Option<JSValueRef>
     // exception are almost never managed in this library and
@@ -388,6 +376,24 @@ impl JSObject<JSPromise> {
             JSObjectCallAsFunction(
                 data.context,
                 data.resolve.inner,
+                self.inner, // TODO: need some investigation of what is the this.
+                arguments.len() as _,
+                arguments
+                    .iter()
+                    .map(|s| s.inner)
+                    .collect::<Vec<JSValueRef>>()
+                    .as_ptr(),
+                std::ptr::null_mut(),
+            )
+        };
+    }
+
+    pub fn reject(self, arguments: &[JSValue]) {
+        let data = self.data.unwrap();
+        unsafe {
+            JSObjectCallAsFunction(
+                data.context,
+                data.reject.inner,
                 self.inner, // TODO: need some investigation of what is the this.
                 arguments.len() as _,
                 arguments
@@ -419,7 +425,6 @@ pub struct JSVirtualMachine {
 impl Drop for JSVirtualMachine {
     fn drop(&mut self) {
         unsafe {
-            JSGarbageCollect(self.global_context);
             JSGlobalContextRelease(self.global_context);
             JSContextGroupRelease(self.context_group);
         }
@@ -473,6 +478,7 @@ impl From<JSContextRef> for JSContext {
         Self { inner: ctx, vm }
     }
 }
+
 impl JSContext {
     /// Create a new context in the same virtual machine
     pub fn split(&self) -> Self {
@@ -549,3 +555,49 @@ impl JSContext {
         }
     }
 }
+
+/// The JSProtected is used as a JSObject specification. You can create the
+/// JSObject<JSProtected> from a JSValue and it will call `JSValueProtect`.
+///
+/// Note: The context can be droped before the instance of JSProtected if we
+/// persist to store every object. We should say that any stored value has to be
+/// droped BEFORE stored contexts (or at least the linked context). But we have
+/// to put an effort on tracking the number of references for each linked
+/// contexts to avoid bugs.
+pub struct JSProtected {
+    inner: JSValueRef,
+    context: JSContextRef,
+}
+
+impl Drop for JSProtected {
+    fn drop(&mut self) {
+        unsafe { JSValueUnprotect(self.context, self.inner) }
+    }
+}
+
+impl JSObject<JSProtected> {
+    pub fn call_as_function(self) {
+        unsafe {
+            JSObjectCallAsFunction(
+                self.data.unwrap().context,
+                self.inner,
+                self.inner,
+                0,
+                vec![].as_ptr(),
+                std::ptr::null_mut(),
+            );
+        }
+    }
+}
+
+// It is usually forbidden to keep track of JSObject references and JSValues if
+// they are not retained before... Here we assume that JSC wont garbage collect
+// any function because there always is a reference to a resolve or a reject
+// function until one of these function has been called.
+unsafe impl Send for JSObject<JSPromise> {}
+
+/// The protection around the value reference allow us to store the object and
+/// send it between threads safely. (since the linked context is still
+/// retained... TODO: add a reference counter or a protection arround linked
+/// contexts)
+unsafe impl Send for JSObject<JSProtected> {}
