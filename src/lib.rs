@@ -121,6 +121,12 @@ impl JSValue {
         unsafe { JSValueIsString(context.inner, self.inner) }
     }
 
+    /// Gets this value as a `bool`.
+    pub fn to_bool(&self, context: &JSContext) -> bool {
+        let boolean = unsafe { JSValueToBoolean(context.inner, self.inner) };
+        boolean
+    }
+
     /// Formats this value as a `String`.
     // TODO: This should be a Result
     pub fn to_string(&self, context: &JSContext) -> String {
