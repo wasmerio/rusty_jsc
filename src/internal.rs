@@ -1,7 +1,7 @@
 use crate::{JSContext, JSValue};
-use anyhow::Result;
 use rusty_jsc_sys::*;
 use std::ffi::CString;
+use std::fmt;
 
 /// A JavaScript string.
 pub struct JSString {
@@ -32,12 +32,14 @@ impl JSString {
         JSValue::from(unsafe { JSValueMakeString(context.inner, self.inner) })
     }
 
-    pub fn from_utf8(value: String) -> Result<Self> {
-        let value = CString::new(value.as_bytes())?;
+    /// Constructs a JSString from a Rust `String`
+    pub fn from_utf8(value: String) -> Self {
+        let value = CString::new(value.as_bytes()).unwrap();
         let value = unsafe { JSStringCreateWithUTF8CString(value.as_ptr()) };
-        Ok(JSString::from(value))
+        JSString::from(value)
     }
 
+    /// Returns the `JSString` as a Rust `String`
     pub fn to_string(&self) -> String {
         let len = unsafe { JSStringGetMaximumUTF8CStringSize(self.inner) };
         // let len = unsafe { JSStringGetLength(self.inner) };
@@ -45,5 +47,28 @@ impl JSString {
         let len = unsafe { JSStringGetUTF8CString(self.inner, chars.as_mut_ptr(), len) };
         let chars = &chars[0..(len - 1) as usize];
         String::from_utf8(chars.iter().map(|&c| c as u8).collect()).unwrap()
+    }
+}
+
+impl From<String> for JSString {
+    fn from(value: String) -> JSString {
+        Self::from_utf8(value)
+    }
+}
+
+impl From<&str> for JSString {
+    fn from(value: &str) -> JSString {
+        Self::from_utf8(value.to_string())
+    }
+}
+
+impl From<JSString> for String {
+    fn from(value: JSString) -> String {
+        value.to_string()
+    }
+}
+impl fmt::Debug for JSString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "JSString({})", self.to_string())
     }
 }

@@ -16,7 +16,7 @@ fn main() {
             sum,
         );
         sum += 10;
-        Ok(JSValue::string(&ctx, "Returning a string to JS!".to_string()).unwrap())
+        Ok(JSValue::string(&ctx, "Returning a string to JS!"))
     });
 
     let binded_callback_o = binded_callback.to_object(&context).unwrap();

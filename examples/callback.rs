@@ -13,7 +13,7 @@ fn foo(
         args.len(),
         args[0].to_string(&ctx).unwrap()
     );
-    Ok(JSValue::string(&ctx, "Returning a string to JS!".to_string()).unwrap())
+    Ok(JSValue::string(&ctx, "Returning a string to JS!"))
 }
 
 #[callback]
@@ -27,18 +27,16 @@ where
     A: Clone,
 {
     println!("hello from Rust land!");
-    Ok(JSValue::string(&ctx, "Hey".to_string()).unwrap())
+    Ok(JSValue::string(&ctx, "Hey"))
 }
 
 fn main() {
     let mut context = JSContext::default();
     let callback = JSValue::callback(&context, Some(foo));
     let global = context.get_global_object();
-    global
-        .set_property(&context, "foo".to_string(), callback)
-        .unwrap();
+    global.set_property(&context, "foo", callback).unwrap();
     let foo = global
-        .get_property(&context, "foo".to_string())
+        .get_property(&context, "foo")
         .to_object(&context)
         .unwrap();
     let result = foo.call(

@@ -35,10 +35,7 @@ macro_rules! callback_closure {
             .to_object($ctx)
             .unwrap();
 
-        let bind = callback
-            .get_property($ctx, "bind".into())
-            .to_object($ctx)
-            .unwrap();
+        let bind = callback.get_property($ctx, "bind").to_object($ctx).unwrap();
         let binded_callback = bind
             .call(
                 $ctx,

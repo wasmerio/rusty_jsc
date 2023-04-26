@@ -28,7 +28,6 @@ mod internal;
 // #[macro_export]
 mod closure;
 pub use crate::internal::JSString;
-use anyhow::Result;
 pub use rusty_jsc_macros::callback;
 pub use rusty_jsc_sys::JSObjectCallAsFunctionCallback;
 use rusty_jsc_sys::*;
@@ -78,15 +77,13 @@ impl JSValue {
     }
 
     /// Creates a `string` value.
-    pub fn string(context: &JSContext, value: String) -> Result<JSValue> {
-        let value = JSString::from_utf8(value)?;
-        Ok(JSValue::from(unsafe {
-            JSValueMakeString(context.inner, value.inner)
-        }))
+    pub fn string(context: &JSContext, value: impl Into<JSString>) -> JSValue {
+        let value = value.into();
+        JSValue::from(unsafe { JSValueMakeString(context.inner, value.inner) })
     }
 
     pub fn callback(context: &JSContext, callback: JSObjectCallAsFunctionCallback) -> JSValue {
-        let name = JSString::from_utf8("".to_string()).unwrap();
+        let name = JSString::from_utf8("".to_string());
         let func = unsafe { JSObjectMakeFunctionWithCallback(context.inner, name.inner, callback) };
         JSValue::from(func)
     }
@@ -127,14 +124,13 @@ impl JSValue {
     }
 
     /// Formats this value as a `String`.
-    pub fn to_string(&self, context: &JSContext) -> Result<String, JSValue> {
+    pub fn to_string(&self, context: &JSContext) -> Result<JSString, JSValue> {
         let mut exception: JSValueRef = std::ptr::null_mut();
         let string = unsafe { JSValueToStringCopy(context.inner, self.inner, &mut exception) };
         if !exception.is_null() {
             return Err(JSValue::from(exception));
         }
-        let string = JSString::from(string);
-        Ok(string.to_string())
+        Ok(JSString::from(string))
     }
 
     // Tries to convert the value to a number
@@ -209,10 +205,10 @@ impl JSObject {
 
     pub fn new_function_with_callback(
         context: &JSContext,
-        name: String,
+        name: impl Into<JSString>,
         callback: JSObjectCallAsFunctionCallback,
     ) -> Self {
-        let name = JSString::from_utf8(name).unwrap();
+        let name = name.into();
         let o_ref =
             unsafe { JSObjectMakeFunctionWithCallback(context.inner, name.inner, callback) };
         Self::from(o_ref)
@@ -241,8 +237,7 @@ impl JSObject {
                     "Can't call constructor for {:?}: not a valid constructor",
                     self.to_jsvalue().to_string(context)
                 ),
-            )
-            .unwrap());
+            ));
         }
         Ok(Self::from(result))
     }
@@ -276,8 +271,7 @@ impl JSObject {
                     "Can't call the object {:?}: not a valid function",
                     self.to_jsvalue().to_string(context)
                 ),
-            )
-            .unwrap());
+            ));
         }
         Ok(JSValue::from(result))
     }
@@ -308,7 +302,10 @@ impl JSObject {
             return Err(JSValue::from(exception));
         }
         if result.is_null() {
-            return Err(JSValue::string(context, "Can't create a type array".to_string()).unwrap());
+            return Err(JSValue::string(
+                context,
+                "Can't create a type array".to_string(),
+            ));
         }
         Ok(Self::from(result))
     }
@@ -333,8 +330,7 @@ impl JSObject {
             return Err(JSValue::string(
                 context,
                 "Can't create a typed array from the provided buffer".to_string(),
-            )
-            .unwrap());
+            ));
         }
         Ok(Self::from(result))
     }
@@ -353,8 +349,8 @@ impl JSObject {
     }
 
     /// Gets the property of an object.
-    pub fn get_property(&self, context: &JSContext, property_name: String) -> JSValue {
-        let property_name = JSString::from_utf8(property_name).unwrap();
+    pub fn get_property(&self, context: &JSContext, property_name: impl Into<JSString>) -> JSValue {
+        let property_name = property_name.into();
         let mut exception: JSValueRef = std::ptr::null_mut();
         let jsvalue_ref = unsafe {
             JSObjectGetProperty(
@@ -417,10 +413,10 @@ impl JSObject {
     pub fn set_property(
         &self,
         context: &JSContext,
-        property_name: String,
+        property_name: impl Into<JSString>,
         value: JSValue,
     ) -> Result<(), JSValue> {
-        let property_name = JSString::from_utf8(property_name).unwrap();
+        let property_name = property_name.into();
         let attributes = 0; // TODO
         let mut exception: JSValueRef = std::ptr::null_mut();
         unsafe {
@@ -592,7 +588,7 @@ impl JSContext {
         script: &str,
         starting_line_number: i32,
     ) -> Result<JSValue, JSValue> {
-        let script = JSString::from_utf8(script.to_string()).unwrap();
+        let script = JSString::from_utf8(script.to_string());
         let this_object = std::ptr::null_mut();
         let source_url = std::ptr::null_mut();
         let mut exception: JSValueRef = std::ptr::null_mut();
