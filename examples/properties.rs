@@ -7,12 +7,16 @@ fn main() {
     global.set_property(&context, "hello".to_string(), hello);
     match context.evaluate_script("hello", 1) {
         Some(value) => {
-            println!("{}", value.to_string(&context));
+            println!("{}", value.to_string(&context).unwrap());
         }
         None => {
             println!(
                 "Uncaught: {}",
-                context.get_exception().unwrap().to_string(&context)
+                context
+                    .get_exception()
+                    .unwrap()
+                    .to_string(&context)
+                    .unwrap()
             )
         }
     }

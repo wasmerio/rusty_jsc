@@ -11,7 +11,7 @@ fn foo(
     println!(
         "hello from Rust land! len: {}, value[0]: {}",
         args.len(),
-        args[0].to_string(&ctx)
+        args[0].to_string(&ctx).unwrap()
     );
     Ok(JSValue::string(&ctx, "Returning a string to JS!".to_string()).unwrap())
 }
@@ -37,24 +37,32 @@ fn main() {
     global.set_property(&context, "foo".to_string(), callback);
     let foo = global
         .get_property(&context, "foo".to_string())
-        .to_object(&context);
+        .to_object(&context)
+        .unwrap();
     let result = foo.call(
         &context,
-        JSValue::undefined(&context).to_object(&context),
+        JSValue::undefined(&context).to_object(&context).unwrap(),
         &[
             JSValue::number(&context, 5f64),
             JSValue::number(&context, 6f64),
         ],
     );
-    println!("direct call: {}", result.unwrap().to_string(&context));
+    println!(
+        "direct call: {}",
+        result.unwrap().to_string(&context).unwrap()
+    );
     match context.evaluate_script("foo(1, 2, 3)", 1) {
         Some(value) => {
-            println!("{}", value.to_string(&context));
+            println!("{}", value.to_string(&context).unwrap());
         }
         None => {
             println!(
                 "Uncaught: {}",
-                context.get_exception().unwrap().to_string(&context)
+                context
+                    .get_exception()
+                    .unwrap()
+                    .to_string(&context)
+                    .unwrap()
             )
         }
     }

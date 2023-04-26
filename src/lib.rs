@@ -12,12 +12,12 @@
 //! let mut context = JSContext::default();
 //! match context.evaluate_script("'hello, world'", 1) {
 //!     Some(value) => {
-//!         println!("{}", value.to_string(&context));
+//!         println!("{}", value.to_string(&context).unwrap());
 //!     }
 //!     None => {
 //!         println!(
 //!             "Uncaught: {}",
-//!             context.get_exception().unwrap().to_string(&context)
+//!             context.get_exception().unwrap().to_string(&context).unwrap()
 //!         )
 //!     }
 //! }
@@ -123,32 +123,39 @@ impl JSValue {
 
     /// Gets this value as a `bool`.
     pub fn to_bool(&self, context: &JSContext) -> bool {
-        let boolean = unsafe { JSValueToBoolean(context.inner, self.inner) };
-        boolean
+        unsafe { JSValueToBoolean(context.inner, self.inner) }
     }
 
     /// Formats this value as a `String`.
-    // TODO: This should be a Result
-    pub fn to_string(&self, context: &JSContext) -> String {
+    pub fn to_string(&self, context: &JSContext) -> Result<String, JSValue> {
         let mut exception: JSValueRef = std::ptr::null_mut();
-        let s = unsafe { JSValueToStringCopy(context.inner, self.inner, &mut exception) };
-        let s = JSString::from(s);
-        s.to_string()
+        let string = unsafe { JSValueToStringCopy(context.inner, self.inner, &mut exception) };
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        let string = JSString::from(string);
+        Ok(string.to_string())
+    }
+
+    // Tries to convert the value to a number
+    pub fn to_number(&self, context: &JSContext) -> Result<f64, JSValue> {
+        let mut exception: JSValueRef = std::ptr::null_mut();
+        let num = unsafe { JSValueToNumber(context.inner, self.inner, &mut exception) };
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        Ok(num)
     }
 
     // Tries to convert the value to an object
-    // TODO: This should be a Result
-    pub fn to_number(&self, context: &JSContext) -> f64 {
-        let mut exception: JSValueRef = std::ptr::null_mut();
-        unsafe { JSValueToNumber(context.inner, self.inner, &mut exception) }
-    }
-
-    // Tries to convert the value to an object
-    // TODO: This should be a Result
-    pub fn to_object(&self, context: &JSContext) -> JSObject {
+    pub fn to_object(&self, context: &JSContext) -> Result<JSObject, JSValue> {
         let mut exception: JSValueRef = std::ptr::null_mut();
         let object_ref = unsafe { JSValueToObject(context.inner, self.inner, &mut exception) };
-        JSObject::from(object_ref)
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        let obj = JSObject::from(object_ref);
+        Ok(obj)
     }
 }
 
@@ -183,7 +190,7 @@ impl JSObject {
     }
 
     /// Create a new Array Object with the given arguments
-    pub fn new_array(context: &JSContext, args: &[JSValue]) -> Self {
+    pub fn new_array(context: &JSContext, args: &[JSValue]) -> Result<Self, JSValue> {
         let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>();
         let mut exception: JSValueRef = std::ptr::null_mut();
         let o_ref = unsafe {
@@ -194,7 +201,10 @@ impl JSObject {
                 &mut exception,
             )
         };
-        Self::from(o_ref)
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        Ok(Self::from(o_ref))
     }
 
     pub fn new_function_with_callback(
@@ -225,7 +235,14 @@ impl JSObject {
             return Err(JSValue::from(exception));
         }
         if result.is_null() {
-            panic!("Not a valid constructor");
+            return Err(JSValue::string(
+                context,
+                format!(
+                    "Can't call constructor for {:?}: not a valid constructor",
+                    self.to_jsvalue().to_string(context)
+                ),
+            )
+            .unwrap());
         }
         Ok(Self::from(result))
     }
@@ -253,7 +270,14 @@ impl JSObject {
             return Err(JSValue::from(exception));
         }
         if result.is_null() {
-            panic!("Not a valid function");
+            return Err(JSValue::string(
+                context,
+                format!(
+                    "Can't call the object {:?}: not a valid function",
+                    self.to_jsvalue().to_string(context)
+                ),
+            )
+            .unwrap());
         }
         Ok(JSValue::from(result))
     }
@@ -284,7 +308,7 @@ impl JSObject {
             return Err(JSValue::from(exception));
         }
         if result.is_null() {
-            panic!("Can't create the typed array");
+            return Err(JSValue::string(context, "Can't create a type array".to_string()).unwrap());
         }
         Ok(Self::from(result))
     }
@@ -306,7 +330,11 @@ impl JSObject {
             return Err(JSValue::from(exception));
         }
         if result.is_null() {
-            panic!("Can't create the typed array from buffer");
+            return Err(JSValue::string(
+                context,
+                "Can't create a typed array from the provided buffer".to_string(),
+            )
+            .unwrap());
         }
         Ok(Self::from(result))
     }

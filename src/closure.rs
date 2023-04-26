@@ -23,7 +23,7 @@ macro_rules! callback_closure {
             this: JSObject,
             args: &[JSValue],
         ) -> Result<JSValue, JSValue> {
-            let lparam = args[0].to_number(&ctx) as usize;
+            let lparam = args[0].to_number(&ctx).unwrap() as usize;
             let callback: &mut &mut CallbackType = unsafe {
                 let closure_pointer_pointer = lparam as *mut std::ffi::c_void;
                 &mut *(closure_pointer_pointer as *mut _)
@@ -31,9 +31,14 @@ macro_rules! callback_closure {
             callback(ctx, function, this, &args[1..])
         }
 
-        let callback = JSValue::callback($ctx, Some(trampoline)).to_object($ctx);
+        let callback = JSValue::callback($ctx, Some(trampoline))
+            .to_object($ctx)
+            .unwrap();
 
-        let bind = callback.get_property($ctx, "bind".into()).to_object($ctx);
+        let bind = callback
+            .get_property($ctx, "bind".into())
+            .to_object($ctx)
+            .unwrap();
         let binded_callback = bind
             .call(
                 $ctx,
