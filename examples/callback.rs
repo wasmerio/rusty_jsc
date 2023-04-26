@@ -33,8 +33,10 @@ where
 fn main() {
     let mut context = JSContext::default();
     let callback = JSValue::callback(&context, Some(foo));
-    let mut global = context.get_global_object();
-    global.set_property(&context, "foo".to_string(), callback);
+    let global = context.get_global_object();
+    global
+        .set_property(&context, "foo".to_string(), callback)
+        .unwrap();
     let foo = global
         .get_property(&context, "foo".to_string())
         .to_object(&context)
@@ -52,18 +54,11 @@ fn main() {
         result.unwrap().to_string(&context).unwrap()
     );
     match context.evaluate_script("foo(1, 2, 3)", 1) {
-        Some(value) => {
+        Ok(value) => {
             println!("{}", value.to_string(&context).unwrap());
         }
-        None => {
-            println!(
-                "Uncaught: {}",
-                context
-                    .get_exception()
-                    .unwrap()
-                    .to_string(&context)
-                    .unwrap()
-            )
+        Err(e) => {
+            println!("Uncaught: {}", e.to_string(&context).unwrap())
         }
     }
 }

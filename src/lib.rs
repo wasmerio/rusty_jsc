@@ -11,13 +11,13 @@
 //!
 //! let mut context = JSContext::default();
 //! match context.evaluate_script("'hello, world'", 1) {
-//!     Some(value) => {
+//!     Ok(value) => {
 //!         println!("{}", value.to_string(&context).unwrap());
 //!     }
-//!     None => {
+//!     Err(e) => {
 //!         println!(
 //!             "Uncaught: {}",
-//!             context.get_exception().unwrap().to_string(&context).unwrap()
+//!             e.to_string(&context).unwrap()
 //!         )
 //!     }
 //! }
@@ -535,7 +535,6 @@ impl JSVirtualMachine {
 pub struct JSContext {
     inner: JSContextRef,
     vm: JSVirtualMachine,
-    exception: Option<JSValue>,
 }
 
 impl fmt::Debug for JSContext {
@@ -554,11 +553,7 @@ impl JSContext {
     /// Create a `JSContext` object from `JSContextRef`.
     pub fn from(ctx: JSContextRef) -> Self {
         let vm = JSVirtualMachine::from(ctx);
-        Self {
-            inner: ctx,
-            vm,
-            exception: None,
-        }
+        Self { inner: ctx, vm }
     }
 
     /// Create a new `JSContext` object.
@@ -571,7 +566,6 @@ impl JSContext {
         Self {
             inner: vm.global_context,
             vm,
-            exception: None,
         }
     }
 
@@ -580,7 +574,6 @@ impl JSContext {
         Self {
             inner: vm.global_context,
             vm,
-            exception: None,
         }
     }
 
@@ -589,18 +582,16 @@ impl JSContext {
         JSObject::from(unsafe { JSContextGetGlobalObject(self.inner) })
     }
 
-    /// Return the exception thrown while evaluating a script.
-    pub fn get_exception(&self) -> Option<&JSValue> {
-        self.exception.as_ref()
-    }
-
     /// Evaluate the script.
     ///
     /// Returns the value the script evaluates to. If the script throws an
     /// exception, this function returns `None`. You can query the thrown
     /// exception with the `get_exception` method.
-    pub fn evaluate_script(&mut self, script: &str, starting_line_number: i32) -> Option<JSValue> {
-        self.exception = None;
+    pub fn evaluate_script(
+        &mut self,
+        script: &str,
+        starting_line_number: i32,
+    ) -> Result<JSValue, JSValue> {
         let script = JSString::from_utf8(script.to_string()).unwrap();
         let this_object = std::ptr::null_mut();
         let source_url = std::ptr::null_mut();
@@ -615,12 +606,9 @@ impl JSContext {
                 &mut exception,
             )
         };
-        let value = JSValue::from(value);
-        if value.is_null(self) {
-            self.exception = Some(JSValue::from(exception));
-            None
-        } else {
-            Some(value)
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
         }
+        Ok(JSValue::from(value))
     }
 }

@@ -1,7 +1,7 @@
-use rusty_jsc::{callback_closure, JSContext, JSObject, JSValue};
+use rusty_jsc::{callback_closure, JSContext, JSValue};
 
 fn main() {
-    let mut context = JSContext::default();
+    let context = JSContext::default();
 
     let mut sum = 0;
     let binded_callback = callback_closure!(&context, move |ctx: JSContext,
@@ -20,15 +20,19 @@ fn main() {
     });
 
     let binded_callback_o = binded_callback.to_object(&context).unwrap();
-    binded_callback_o.call(
-        &context,
-        binded_callback_o.clone(),
-        &[JSValue::number(&context, 5f64)],
-    );
+    binded_callback_o
+        .call(
+            &context,
+            binded_callback_o.clone(),
+            &[JSValue::number(&context, 5f64)],
+        )
+        .unwrap();
 
-    binded_callback_o.call(
-        &context,
-        binded_callback_o.clone(),
-        &[JSValue::number(&context, 5f64)],
-    );
+    binded_callback_o
+        .call(
+            &context,
+            binded_callback_o.clone(),
+            &[JSValue::number(&context, 5f64)],
+        )
+        .unwrap();
 }
