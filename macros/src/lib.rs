@@ -6,7 +6,7 @@ fn get_name(func_argument: &FnArg) -> Ident {
     match func_argument {
         FnArg::Typed(fn_type) => get_name_pat(&*fn_type.pat),
         _ => {
-            panic!("Not supported function argument: {:?}", func_argument)
+            panic!("Not supported function argument")
         }
     }
 }
@@ -16,7 +16,7 @@ fn get_name_pat(func_argument: &Pat) -> Ident {
         Pat::Ident(ident) => return ident.ident.clone(),
         Pat::Type(pat_type) => return get_name_pat(&*pat_type.pat),
         _ => {
-            panic!("Not supported function argument: {:?}", func_argument)
+            panic!("Not supported function argument")
         }
     }
 }

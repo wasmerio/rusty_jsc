@@ -140,8 +140,7 @@ impl JSValue {
     // TODO: This should be a Result
     pub fn to_number(&self, context: &JSContext) -> f64 {
         let mut exception: JSValueRef = std::ptr::null_mut();
-        let num = unsafe { JSValueToNumber(context.inner, self.inner, &mut exception) };
-        num
+        unsafe { JSValueToNumber(context.inner, self.inner, &mut exception) }
     }
 
     // Tries to convert the value to an object
@@ -170,9 +169,6 @@ impl Drop for JSObject {
         // TODO
     }
 }
-
-#[no_mangle]
-pub extern "C" fn id(a: *mut std::ffi::c_void, b: *mut std::ffi::c_void) {}
 
 impl JSObject {
     /// Wraps a `JSObject` from a `JSObjectRef`.
@@ -210,18 +206,12 @@ impl JSObject {
         let o_ref =
             unsafe { JSObjectMakeFunctionWithCallback(context.inner, name.inner, callback) };
         Self::from(o_ref)
-        // JSObjectMakeFunction(ctx, name, parameterCount, parameterNames, body, sourceURL, startingLineNumber, exception)
     }
 
     /// Calls the object constructor
     pub fn construct(&self, context: &JSContext, args: &[JSValue]) -> Result<Self, JSValue> {
         let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>();
         let mut exception: JSValueRef = std::ptr::null_mut();
-
-        // let args_refs_slice = unsafe { std::slice::from_raw_parts(args_refs, 1) };
-        // // println!("args_refs_slice {}", args_refs_slice.len());
-        // let args_back = args_refs_slice.iter().map(|r| JSValue::from(*r)).collect::<Vec<_>>();
-        // println!("CONSTRUCT LEN {} {:?} {}", args.len(), args_refs, args_back[0].to_string(&context));
         let result = unsafe {
             JSObjectCallAsConstructor(
                 context.inner,
@@ -237,9 +227,6 @@ impl JSObject {
         if result.is_null() {
             panic!("Not a valid constructor");
         }
-        // if result.is_null() {
-        //     panic!("The object has no constructor");
-        // }
         Ok(Self::from(result))
     }
 
@@ -371,15 +358,14 @@ impl JSObject {
     pub fn get_property_names(&mut self, context: &JSContext) -> Vec<String> {
         let property_name_array = unsafe { JSObjectCopyPropertyNames(context.inner, self.inner) };
         let num_properties = unsafe { JSPropertyNameArrayGetCount(property_name_array) };
-        let all_names = (0..num_properties)
+        (0..num_properties)
             .map(|property_index| {
                 JSString::from(unsafe {
                     JSPropertyNameArrayGetNameAtIndex(property_name_array, property_index)
                 })
                 .to_string()
             })
-            .collect::<Vec<_>>();
-        return all_names;
+            .collect::<Vec<_>>()
     }
 
     // Get the object as an array buffer
@@ -461,14 +447,15 @@ impl From<JSValueRef> for JSValue {
     }
 }
 
-impl Into<JSValueRef> for JSValue {
-    fn into(self) -> JSValueRef {
-        self.inner
+impl From<JSValue> for JSValueRef {
+    fn from(val: JSValue) -> Self {
+        val.inner
     }
 }
-impl Into<JSObjectRef> for JSObject {
-    fn into(self) -> JSObjectRef {
-        self.inner
+
+impl From<JSObject> for JSObjectRef {
+    fn from(val: JSObject) -> JSObjectRef {
+        val.inner
     }
 }
 
