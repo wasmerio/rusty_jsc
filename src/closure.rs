@@ -47,6 +47,6 @@ macro_rules! callback_closure {
             )
             .unwrap();
 
-        binded_callback
+        binded_callback.to_object($ctx).unwrap()
     }};
 }
