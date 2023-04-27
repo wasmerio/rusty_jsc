@@ -39,7 +39,7 @@ macro_rules! callback_closure {
         let binded_callback = bind
             .call(
                 $ctx,
-                callback,
+                Some(&callback),
                 &[
                     JSValue::undefined($ctx),
                     JSValue::number($ctx, lparam as f64),

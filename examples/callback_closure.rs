@@ -23,7 +23,7 @@ fn main() {
     binded_callback_o
         .call(
             &context,
-            binded_callback_o.clone(),
+            Some(&binded_callback_o),
             &[JSValue::number(&context, 5f64)],
         )
         .unwrap();
@@ -31,7 +31,7 @@ fn main() {
     binded_callback_o
         .call(
             &context,
-            binded_callback_o.clone(),
+            Some(&binded_callback_o),
             &[JSValue::number(&context, 5f64)],
         )
         .unwrap();

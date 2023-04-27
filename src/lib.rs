@@ -246,7 +246,7 @@ impl JSObject {
     pub fn call(
         &self,
         context: &JSContext,
-        this: JSObject, // TODO: Make Optional
+        this: Option<&JSObject>,
         args: &[JSValue],
     ) -> Result<JSValue, JSValue> {
         let args_refs = args.iter().map(|arg| arg.inner).collect::<Vec<_>>();
@@ -255,7 +255,8 @@ impl JSObject {
             JSObjectCallAsFunction(
                 context.inner,
                 self.inner,
-                this.inner,
+                this.map(|t| t.inner)
+                    .unwrap_or_else(|| std::ptr::null_mut()),
                 args.len() as _,
                 args_refs.as_slice().as_ptr(),
                 &mut exception,

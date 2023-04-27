@@ -41,7 +41,7 @@ fn main() {
         .unwrap();
     let result = foo.call(
         &context,
-        JSValue::undefined(&context).to_object(&context).unwrap(),
+        None,
         &[
             JSValue::number(&context, 5f64),
             JSValue::number(&context, 6f64),
