@@ -45,7 +45,15 @@ impl From<JSObject<JSObjectGeneric>> for JSValue {
         // Note: this is also the case of a JSPromise since we don't need
         // to protect or retain anything.
         Self {
-            inner: unsafe { std::mem::transmute(js_object.inner) },
+            inner: js_object.inner,
+        }
+    }
+}
+
+impl From<JSObject<JSObjectGenericClass>> for JSValue {
+    fn from(js_object: JSObject<JSObjectGenericClass>) -> Self {
+        Self {
+            inner: js_object.inner,
         }
     }
 }
@@ -53,7 +61,7 @@ impl From<JSObject<JSObjectGeneric>> for JSValue {
 impl From<JSObject<JSPromise>> for JSValue {
     fn from(js_object: JSObject<JSPromise>) -> Self {
         Self {
-            inner: unsafe { std::mem::transmute(js_object.inner) },
+            inner: js_object.inner,
         }
     }
 }
@@ -182,7 +190,7 @@ impl JSValue {
 /// A JavaScript object.
 #[derive(Debug, Clone)]
 pub struct JSObject<T = JSObjectGeneric> {
-    pub inner: JSObjectRef,
+    inner: JSObjectRef,
     /// The data is used to keep track if the JSObject is eventually constructed
     /// as a class or a protected value
     data: Option<T>,
@@ -226,7 +234,7 @@ impl JSClass {
         }
     }
 
-    pub fn make_object(&self, context: &JSContext) -> JSObject<JSObjectGeneric> {
+    pub fn make_object(&self, context: &JSContext) -> JSObject<JSObjectGenericClass> {
         unsafe {
             JSObject {
                 inner: JSObjectMake(context.get_ref(), self.inner, std::ptr::null_mut()),
@@ -255,6 +263,7 @@ impl From<JSClassRef> for JSClass {
 
 #[derive(Clone)]
 pub struct JSObjectGeneric;
+pub struct JSObjectGenericClass;
 
 impl<T> JSObject<T> {
     /// Sets the property of an object.
@@ -355,10 +364,57 @@ impl<T> JSObject<T> {
         }
     }
 
-    pub fn make(context: &mut JSContext) -> JSObject {
+    /// Make a nude object
+    ///
+    /// Note: you cannot set private datas inside this object because it doesn't
+    /// derive from a class. If you would like to use private datas, create a
+    /// class object with JSObject::class or JSClass::create().make_object()
+    pub fn make(context: &JSContext) -> JSObject {
         unsafe { JSObjectMake(context.inner, std::ptr::null_mut(), std::ptr::null_mut()).into() }
     }
 }
+
+// Private data implementation. This is available only for JSObject<JSClass> and
+// JSObject<JSObjectGenericClass>.
+
+pub trait HasPrivateData {}
+impl HasPrivateData for JSObject<JSObjectGenericClass> {}
+impl HasPrivateData for JSObject<JSClass> {}
+
+impl<T> JSObject<T>
+where
+    JSObject<T>: HasPrivateData,
+{
+    pub fn set_private_data<N>(&mut self, data: N) -> Result<(), Box<N>> {
+        let boxed = Box::new(data);
+        let data_ptr = Box::into_raw(boxed);
+        if !unsafe { JSObjectSetPrivate(self.inner, data_ptr as _) } {
+            return Err(unsafe { Box::from_raw(data_ptr) });
+        }
+        Ok(())
+    }
+
+    /// Get private data
+    ///
+    /// # Safety
+    /// The pointer to the private data isn't guaranted to be type N if you put
+    /// something else before.
+    pub unsafe fn get_private_data<N>(&mut self) -> Option<*mut N> {
+        let data = JSObjectGetPrivate(self.inner);
+        if data.is_null() {
+            None
+        } else {
+            Some(data as _)
+        }
+    }
+}
+
+impl From<JSObject<JSObjectGenericClass>> for JSObject<JSObjectGeneric> {
+    fn from(gc: JSObject<JSObjectGenericClass>) -> Self {
+        unsafe { std::mem::transmute(gc) }
+    }
+}
+
 #[derive(Clone)]
 pub struct JSPromise {
     resolve: JSObject,
@@ -418,7 +474,7 @@ impl JSObject<JSPromise> {
 /// A JavaScript virtual machine.
 #[derive(Clone)]
 pub struct JSVirtualMachine {
-    pub context_group: JSContextGroupRef,
+    context_group: JSContextGroupRef,
     global_context: JSGlobalContextRef,
 }
 
@@ -463,7 +519,7 @@ impl JSVirtualMachine {
 /// A JavaScript execution context.
 pub struct JSContext {
     inner: JSContextRef,
-    pub vm: JSVirtualMachine,
+    vm: JSVirtualMachine,
 }
 
 impl Default for JSContext {
