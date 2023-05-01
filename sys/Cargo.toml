@@ -2,7 +2,7 @@
 name = "rusty_jsc_sys"
 version = "0.1.0"
 description = "Raw bindings for the JavaScriptCore engine"
-authors = [ "Wasmer Engineering Team <engineering@wasmer.io>", "Pekka Enberg" ]
+authors = [ "Wasmer Engineering Team <engineering@wasmer.io>", "Pekka Enberg", "Adrien Zinger" ]
 repository = "https://github.com/wasmerio/rusty_jsc"
 license = "MIT"
 edition = "2021"
