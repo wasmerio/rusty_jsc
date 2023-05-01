@@ -52,7 +52,7 @@ dependencies = [
 
 [[package]]
 name = "rusty_jsc_macros"
-version = "0.0.3"
+version = "0.1.0"
 dependencies = [
  "pkg-config",
  "proc-macro-error",
