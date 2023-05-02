@@ -1059,16 +1059,49 @@ extern "C" {
         length: size_t,
         exception: *mut JSValueRef,
     ) -> JSObjectRef;
+    /// Returns a pointer to the raw data buffer that serves as object's backing
+    /// store or NULL if object is not a Typed Array object.
+    ///
+    /// Note: The pointer returned by this function is temporary and is not
+    /// guaranteed to remain valid across JavaScriptCore API calls.
+    ///
+    /// # Parameters
+    /// * ctx          The execution context to use.
+    /// * object       The Typed Array object whose backing store pointer to
+    ///                return.
+    /// * exception    A pointer to a JSValueRef in which to store an exception,
+    ///                if any. Pass NULL if you do not care to store an
+    ///                exception.
     pub fn JSObjectGetTypedArrayBytesPtr(
         ctx: JSContextRef,
         object: JSObjectRef,
         exception: *mut JSValueRef,
     ) -> *mut ::std::os::raw::c_void;
+
+    /// Returns the length of the Typed Array object or 0 if the object is not a
+    /// Typed Array object.
+    ///
+    /// # Parameters
+    /// * ctx          The execution context to use.
+    /// * object       The Typed Array object whose length to return.
+    /// * exception    A pointer to a JSValueRef in which to store an exception,
+    ///                if any. Pass NULL if you do not care to store an
+    ///                exception.
     pub fn JSObjectGetTypedArrayLength(
         ctx: JSContextRef,
         object: JSObjectRef,
         exception: *mut JSValueRef,
     ) -> size_t;
+    /// Return the byte length of the Typed Array object or 0 if the object is
+    /// not a Typed Array object.
+    ///
+    /// # Parameters
+    ///
+    /// * ctx          The execution context to use.
+    /// * object       The Typed Array object whose byte length to return.
+    /// * exception    A pointer to a JSValueRef in which to store an exception,
+    ///                if any. Pass NULL if you do not care to store an
+    ///                exception.
     pub fn JSObjectGetTypedArrayByteLength(
         ctx: JSContextRef,
         object: JSObjectRef,

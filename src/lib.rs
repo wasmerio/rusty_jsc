@@ -218,6 +218,9 @@ impl JSValue {
     }
 }
 
+#[derive(Clone)]
+pub struct JSObjectGeneric;
+
 /// A JavaScript object.
 #[derive(Debug, Clone)]
 pub struct JSObject<T = JSObjectGeneric> {
@@ -233,68 +236,6 @@ impl<T> From<JSObjectRef> for JSObject<T> {
         Self { inner, data: None }
     }
 }
-
-pub struct JSClass {
-    inner: JSClassRef,
-}
-
-impl JSClass {
-    pub fn create(name: impl ToString, constructor: JSObjectCallAsConstructorCallback) -> JSClass {
-        JSClass::create_ref(name, constructor).into()
-    }
-
-    fn create_ref(
-        name: impl ToString,
-        constructor: JSObjectCallAsConstructorCallback,
-    ) -> JSClassRef {
-        let mut class_definition = unsafe { kJSClassDefinitionEmpty };
-        class_definition.className = name.to_string().as_bytes().as_ptr() as _;
-        class_definition.callAsConstructor = constructor;
-        // TODO: we should manage the attributes and static parameters (even if it
-        //       looks broken for the version 4.0)
-        // class_definition.attributes = kJSClassAttributeNoAutomaticPrototype;
-        // class_definition.staticValues = values;
-        // class_definition.staticFunctions = log;
-
-        // TODO: manage private datas if any, we give std::ptr::null_mut() for the
-        //       moment.
-        unsafe {
-            let class = JSClassCreate([class_definition].as_ptr() as _);
-            JSClassRetain(class);
-            class
-        }
-    }
-
-    pub fn make_object(&self, context: &JSContext) -> JSObject<JSObjectGenericClass> {
-        unsafe {
-            JSObject {
-                inner: JSObjectMake(context.get_ref(), self.inner, std::ptr::null_mut()),
-                data: None,
-            }
-        }
-    }
-}
-
-impl Drop for JSClass {
-    fn drop(&mut self) {
-        // Here we want to drop and release the class. But we might have transfered the ownership
-        // of the pointer to someone else. If any, we should have also swap the inner value with
-        // a null pointer because we dont want to signal to JSC to release anything.
-        if !self.inner.is_null() {
-            unsafe { JSClassRelease(self.inner) }
-        }
-    }
-}
-
-impl From<JSClassRef> for JSClass {
-    fn from(inner: JSClassRef) -> Self {
-        Self { inner }
-    }
-}
-
-#[derive(Clone)]
-pub struct JSObjectGeneric;
-pub struct JSObjectGenericClass;
 
 impl<T> JSObject<T> {
     /// Create a new generic object
@@ -446,7 +387,7 @@ impl<T> JSObject<T> {
             JSObjectMakeTypedArrayWithBytesNoCopy(
                 context.inner,
                 JSTypedArrayType_kJSTypedArrayTypeUint8Array,
-                bytes.as_mut_ptr() as _,
+                bytes.as_ptr() as _,
                 bytes.len() as _,
                 None,
                 deallocator_ctx,
@@ -457,10 +398,7 @@ impl<T> JSObject<T> {
             return Err(JSValue::from(exception));
         }
         if result.is_null() {
-            return Err(JSValue::string(
-                context,
-                "Can't create a type array".to_string(),
-            ));
+            return Err(JSValue::string(context, "Can't create a type array"));
         }
         Ok(Self::from(result))
     }
@@ -484,22 +422,30 @@ impl<T> JSObject<T> {
         if result.is_null() {
             return Err(JSValue::string(
                 context,
-                "Can't create a typed array from the provided buffer".to_string(),
+                "Can't create a typed array from the provided buffer",
             ));
         }
         Ok(JSObject::from(result))
     }
 
-    pub fn get_typed_array_buffer(&self, context: &JSContext) -> Result<&mut [u8], JSValue> {
+    /// Get a mutable typed array buffer from current object.
+    ///
+    /// # Safety
+    ///
+    /// Only use that buffer in a synchronous context. The pointer (of slice)
+    /// returned by this function is temporary and is not guaranteed to remain
+    /// valid across JavaScriptCore API calls.
+    pub unsafe fn get_typed_array_buffer(&self, context: &JSContext) -> Result<&mut [u8], JSValue> {
         let mut exception: JSValueRef = std::ptr::null_mut();
-        let arr_ptr =
-            unsafe { JSObjectGetTypedArrayBytesPtr(context.inner, self.inner, &mut exception) };
-        let arr_len =
-            unsafe { JSObjectGetTypedArrayLength(context.inner, self.inner, &mut exception) };
+        let arr_ptr = JSObjectGetTypedArrayBytesPtr(context.inner, self.inner, &mut exception);
         if !exception.is_null() {
             return Err(JSValue::from(exception));
         }
-        let slice = unsafe { std::slice::from_raw_parts_mut(arr_ptr as _, arr_len as usize) };
+        let arr_len = JSObjectGetTypedArrayByteLength(context.inner, self.inner, &mut exception);
+        if !exception.is_null() {
+            return Err(JSValue::from(exception));
+        }
+        let slice = std::slice::from_raw_parts_mut(arr_ptr as _, arr_len as usize);
         Ok(slice)
     }
 
@@ -659,6 +605,7 @@ impl<T> JSObject<T>
 where
     JSObject<T>: HasPrivateData,
 {
+    /// Set private data
     pub fn set_private_data<N>(&mut self, data: N) -> Result<(), Box<N>> {
         let boxed = Box::new(data);
         let data_ptr = Box::into_raw(boxed);
@@ -683,12 +630,78 @@ where
     }
 }
 
+pub struct JSClass {
+    inner: JSClassRef,
+}
+
+/// Specification of a `JSObject` as `JSObject<JSObjectGenericClass>` that is a
+/// variation of a `JSGenericObject` available to store private data.
+pub struct JSObjectGenericClass;
+
+impl JSClass {
+    pub fn create(name: impl ToString, constructor: JSObjectCallAsConstructorCallback) -> JSClass {
+        JSClass::create_ref(name, constructor).into()
+    }
+
+    fn create_ref(
+        name: impl ToString,
+        constructor: JSObjectCallAsConstructorCallback,
+    ) -> JSClassRef {
+        let mut class_definition = unsafe { kJSClassDefinitionEmpty };
+        class_definition.className = name.to_string().as_bytes().as_ptr() as _;
+        class_definition.callAsConstructor = constructor;
+        // TODO: we should manage the attributes and static parameters (even if it
+        //       looks broken for the version 4.0)
+        // class_definition.attributes = kJSClassAttributeNoAutomaticPrototype;
+        // class_definition.staticValues = values;
+        // class_definition.staticFunctions = log;
+
+        // TODO: manage private datas if any, we give std::ptr::null_mut() for the
+        //       moment.
+        unsafe {
+            let class = JSClassCreate([class_definition].as_ptr() as _);
+            JSClassRetain(class);
+            class
+        }
+    }
+
+    /// Creates a generic object derived from this class.
+    ///
+    /// Note: if you drop this object that won't affect the class itself.
+    pub fn make_object(&self, context: &JSContext) -> JSObject<JSObjectGenericClass> {
+        unsafe {
+            JSObject {
+                inner: JSObjectMake(context.get_ref(), self.inner, std::ptr::null_mut()),
+                data: None,
+            }
+        }
+    }
+}
+
+impl Drop for JSClass {
+    fn drop(&mut self) {
+        // Here we want to drop and release the class. But we might have transfered the ownership
+        // of the pointer to someone else. If any, we should have also swap the inner value with
+        // a null pointer because we dont want to signal to JSC to release anything.
+        if !self.inner.is_null() {
+            unsafe { JSClassRelease(self.inner) }
+        }
+    }
+}
+
+impl From<JSClassRef> for JSClass {
+    fn from(inner: JSClassRef) -> Self {
+        Self { inner }
+    }
+}
+
 impl From<JSObject<JSObjectGenericClass>> for JSObject<JSObjectGeneric> {
     fn from(gc: JSObject<JSObjectGenericClass>) -> Self {
         unsafe { std::mem::transmute(gc) }
     }
 }
 
+/// Deffered promise.
 #[derive(Clone)]
 pub struct JSPromise {
     resolve: JSObject,
@@ -700,6 +713,10 @@ pub struct JSPromise {
 }
 
 impl JSObject<JSPromise> {
+    /// Call `resolve` function and consume the deffered promise.
+    ///
+    /// Note: you can assume that the promise will be garbage collected after
+    /// that call.
     pub fn resolve(self, arguments: &[JSValue]) {
         let data = self.data.unwrap();
         unsafe {
@@ -718,6 +735,10 @@ impl JSObject<JSPromise> {
         };
     }
 
+    /// Call `reject` function and consume the deffered promise.
+    ///
+    /// Note: you can assume that the promise will be garbage collected after
+    /// that call.
     pub fn reject(self, arguments: &[JSValue]) {
         let data = self.data.unwrap();
         unsafe {
@@ -745,6 +766,25 @@ impl JSObject<JSPromise> {
     }
 }
 
+// It is usually forbidden to keep track of JSObject references and JSValues if
+// they are not retained before... Here we assume that JSC wont garbage collect
+// any function because there always is a reference to a resolve or a reject
+// function until one of these function has been called.
+unsafe impl Send for JSObject<JSPromise> {}
+
+/// The JSProtected is used as a JSObject specification. You can create the
+/// JSObject<JSProtected> from a JSValue and it will call `JSValueProtect`.
+///
+/// Note: The context can be droped before the instance of JSProtected if we
+/// persist to store every object. We should say that any stored value has to be
+/// droped BEFORE stored contexts (or at least the linked context). But we have
+/// to put an effort on tracking the number of references for each linked
+/// contexts to avoid bugs.
+pub struct JSProtected {
+    inner: JSValueRef,
+    context: JSContextRef,
+}
+
 impl JSObject<JSProtected> {
     pub fn context(&self) -> JSContext {
         // todo. 1 there is some duplicated code. 2. we should manage this
@@ -758,20 +798,23 @@ impl JSObject<JSProtected> {
     }
 }
 
+impl Drop for JSProtected {
+    fn drop(&mut self) {
+        unsafe { JSValueUnprotect(self.context, self.inner) }
+    }
+}
+
+/// The protection around the value reference allow us to store the object and
+/// send it between threads safely. (since the linked context is still
+/// retained... TODO: add a reference counter or a protection arround linked
+/// contexts)
+unsafe impl Send for JSObject<JSProtected> {}
+
 /// A JavaScript virtual machine.
 #[derive(Clone)]
 pub struct JSVirtualMachine {
     context_group: JSContextGroupRef,
     global_context: JSGlobalContextRef,
-}
-
-impl Drop for JSVirtualMachine {
-    fn drop(&mut self) {
-        unsafe {
-            JSGlobalContextRelease(self.global_context);
-            JSContextGroupRelease(self.context_group);
-        }
-    }
 }
 
 impl JSVirtualMachine {
@@ -803,29 +846,19 @@ impl JSVirtualMachine {
     }
 }
 
+impl Drop for JSVirtualMachine {
+    fn drop(&mut self) {
+        unsafe {
+            JSGlobalContextRelease(self.global_context);
+            JSContextGroupRelease(self.context_group);
+        }
+    }
+}
+
 /// A JavaScript execution context.
 pub struct JSContext {
     inner: JSContextRef,
     vm: JSVirtualMachine,
-}
-
-impl fmt::Debug for JSContext {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("JSContext").finish()
-    }
-}
-
-impl Default for JSContext {
-    fn default() -> Self {
-        JSContext::new()
-    }
-}
-
-impl From<JSContextRef> for JSContext {
-    fn from(ctx: JSContextRef) -> Self {
-        let vm = JSVirtualMachine::from(ctx);
-        Self { inner: ctx, vm }
-    }
 }
 
 impl JSContext {
@@ -905,33 +938,21 @@ impl JSContext {
     }
 }
 
-/// The JSProtected is used as a JSObject specification. You can create the
-/// JSObject<JSProtected> from a JSValue and it will call `JSValueProtect`.
-///
-/// Note: The context can be droped before the instance of JSProtected if we
-/// persist to store every object. We should say that any stored value has to be
-/// droped BEFORE stored contexts (or at least the linked context). But we have
-/// to put an effort on tracking the number of references for each linked
-/// contexts to avoid bugs.
-pub struct JSProtected {
-    inner: JSValueRef,
-    context: JSContextRef,
-}
-
-impl Drop for JSProtected {
-    fn drop(&mut self) {
-        unsafe { JSValueUnprotect(self.context, self.inner) }
+impl fmt::Debug for JSContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("JSContext").finish()
     }
 }
 
-// It is usually forbidden to keep track of JSObject references and JSValues if
-// they are not retained before... Here we assume that JSC wont garbage collect
-// any function because there always is a reference to a resolve or a reject
-// function until one of these function has been called.
-unsafe impl Send for JSObject<JSPromise> {}
+impl Default for JSContext {
+    fn default() -> Self {
+        JSContext::new()
+    }
+}
 
-/// The protection around the value reference allow us to store the object and
-/// send it between threads safely. (since the linked context is still
-/// retained... TODO: add a reference counter or a protection arround linked
-/// contexts)
-unsafe impl Send for JSObject<JSProtected> {}
+impl From<JSContextRef> for JSContext {
+    fn from(ctx: JSContextRef) -> Self {
+        let vm = JSVirtualMachine::from(ctx);
+        Self { inner: ctx, vm }
+    }
+}
