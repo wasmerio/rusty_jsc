@@ -16,14 +16,18 @@ Please check out [PunJS](examples/punjs) for an example of how to implement a Ja
 
 ### Evaluating a JavaScript script
 ```rust
-use rusty_jsc::JSContext;
+use rusty_jsc::{JSContext};
 
-let mut context = JSContext::default();
-let value = context.evaluate_script("'hello, world'", 1);
-if let Some(value) = value {
-    println!("{}", value.to_string(&context));
-    // Prints:
-    // hello, world
+fn main() {
+    let mut context = JSContext::default();
+    match context.evaluate_script("'Hello World!'", 1) {
+        Ok(value) => {
+            println!("{}", value.to_string(&context).unwrap());
+        }
+        Err(e) => {
+            println!("Uncaught: {}", e.to_string(&context).unwrap())
+        }
+    }
 }
 ```
 
@@ -33,20 +37,65 @@ if let Some(value) = value {
 use rusty_jsc::{JSContext, JSValue};
 use rusty_jsc_macros::callback;
 
-// The JavaScript code calls this Rust function.
 #[callback]
-fn foo(_context: JSContext) {
-    println!("hello from Rust land!");
+fn greet(
+    ctx: JSContext,
+    function: JSObject,
+    this: JSObject,
+    args: &[JSValue],
+) -> Result<JSValue, JSValue> {
+    Ok(JSValue::string(&ctx, format!("Hello, {}", args[0].to_string(&ctx).unwrap())))
 }
 
 fn main() {
     let mut context = JSContext::default();
-    let callback = JSValue::callback(&context, Some(foo));
-    let mut global = context.get_global_object();
-    global.set_property(&context, "foo".to_string(), callback);
-    context.evaluate_script("foo()", 1);
-    // Prints:
-    // hello from Rust land!
+    let callback = JSValue::callback(&context, Some(greet));
+    let global = context.get_global_object();
+    global.set_property(&context, "greet", callback).unwrap();
+
+    match context.evaluate_script("greet('Tom')", 1) {
+        Ok(value) => {
+            println!("{}", value.to_string(&context).unwrap());
+        }
+        Err(e) => {
+            println!("Uncaught: {}", e.to_string(&context).unwrap())
+        }
+    }
+}
+```
+
+#### Passing functions to a callback
+
+```rust
+use rusty_jsc::{JSContext, JSObject, JSValue, JSString};
+use rusty_jsc_macros::callback;
+
+#[callback]
+fn greet(
+    ctx: JSContext,
+    function: JSObject,
+    this: JSObject,
+    args: &[JSValue],
+) -> Result<JSValue, JSValue> {
+    // Parse the argument as a function and call it with an argument
+    let callback_function = args[0].to_object(&ctx).unwrap().call(&ctx, None, &[JSValue::string(&ctx, "Tom")]).unwrap();
+    Ok(callback_function)
+}
+
+fn main() {
+    let mut context = JSContext::default();
+    let callback = JSValue::callback(&context, Some(greet));
+    let global = context.get_global_object();
+    global.set_property(&context, "greet", callback).unwrap();
+
+    match context.evaluate_script("greet((name) => 'Hello, ' + name)", 1) {
+        Ok(value) => {
+            println!("{}", value.to_string(&context).unwrap());
+        }
+        Err(e) => {
+            println!("Uncaught: {}", e.to_string(&context).unwrap())
+        }
+    }
 }
 ```
 
