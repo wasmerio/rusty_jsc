@@ -61,6 +61,7 @@ pub struct OpaqueJSValue {
 pub type JSValueRef = *const OpaqueJSValue;
 
 pub type JSObjectRef = *mut OpaqueJSValue;
+
 extern "C" {
 
     pub fn JSEvaluateScript(
@@ -282,6 +283,17 @@ pub struct JSStaticValue {
     pub attributes: JSPropertyAttributes,
 }
 
+impl Default for JSStaticValue {
+    fn default() -> Self {
+        Self {
+            name: std::ptr::null(),
+            getProperty: None,
+            setProperty: None,
+            attributes: 0,
+        }
+    }
+}
+
 #[test]
 fn bindgen_test_layout_JSStaticValue() {
     assert_eq!(
@@ -371,6 +383,16 @@ pub struct JSStaticFunction {
     pub attributes: JSPropertyAttributes,
 }
 
+impl Default for JSStaticFunction {
+    fn default() -> Self {
+        Self {
+            name: std::ptr::null(),
+            callAsFunction: None,
+            attributes: 0,
+        }
+    }
+}
+
 #[test]
 fn bindgen_test_layout_JSStaticFunction() {
     assert_eq!(
@@ -437,6 +459,7 @@ fn bindgen_test_layout_JSStaticFunction() {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct JSClassDefinition {
     pub version: ::std::os::raw::c_int,
     pub attributes: JSClassAttributes,
@@ -765,6 +788,27 @@ extern "C" {
     pub fn JSClassCreate(definition: *const JSClassDefinition) -> JSClassRef;
     pub fn JSClassRetain(jsClass: JSClassRef) -> JSClassRef;
     pub fn JSClassRelease(jsClass: JSClassRef);
+
+    /// Creates a JavaScript object.
+    ///
+    /// # Parameters
+    /// * ctx The execution context to use.
+    /// * jsClass The JSClass to assign to the object. Pass NULL to use the
+    ///           default object class.
+    /// * data A void* to set as the object's private data. Pass NULL to
+    ///        specify no private data.
+    ///
+    /// # Result
+    /// A JSObject with the given class and private data.
+    ///
+    /// # Notes
+    /// The default object class does not allocate storage for private data, so
+    /// you must provide a non-NULL jsClass to JSObjectMake if you want your
+    /// object to be able to store private data.
+    ///
+    /// Data is set on the created object before the intialize methods in its
+    /// class chain are called. This enables the initialize methods to retrieve
+    /// and manipulate data through JSObjectGetPrivate.
     pub fn JSObjectMake(
         ctx: JSContextRef,
         jsClass: JSClassRef,
@@ -804,6 +848,21 @@ extern "C" {
         arguments: *const JSValueRef,
         exception: *mut JSValueRef,
     ) -> JSObjectRef;
+    /// Creates a JavaScript promise object by invoking the provided executor.
+    ///
+    /// # Parameters
+    /// * ctx The execution context to use.
+    /// * resolve A pointer to a JSObjectRef in which to store the resolve
+    ///   function for the new promise. Pass NULL if you do not care to store
+    ///   the resolve callback.
+    /// * reject A pointer to a JSObjectRef in which to store the reject
+    ///   function for the new promise. Pass NULL if you do not care to store
+    ///   the reject callback.
+    /// * exception A pointer to a JSValueRef in which to store an exception, if
+    ///   any. Pass NULL if you do not care to store an exception.
+    ///
+    /// # Return
+    /// A JSObject that is a promise or NULL if an exception occurred.
     pub fn JSObjectMakeDeferredPromise(
         ctx: JSContextRef,
         resolve: *mut JSObjectRef,
@@ -889,6 +948,23 @@ extern "C" {
     pub fn JSObjectGetPrivate(object: JSObjectRef) -> *mut ::std::os::raw::c_void;
     pub fn JSObjectSetPrivate(object: JSObjectRef, data: *mut ::std::os::raw::c_void) -> bool;
     pub fn JSObjectIsFunction(ctx: JSContextRef, object: JSObjectRef) -> bool;
+    /// Calls an object as a function.
+    ///
+    /// # Parameters
+    /// * ctx The execution context to use.
+    /// * object The JSObject to call as a function.
+    /// * thisObject The object to use as "this," or NULL to use the global
+    ///   object as "this."
+    /// * argumentCount An integer count of the number of arguments in
+    ///   arguments.
+    /// * arguments A JSValue array of arguments to pass to the function. Pass
+    ///   NULL if argumentCount is 0.
+    /// * exception A pointer to a JSValueRef in which to store an exception, if
+    ///   any. Pass NULL if you do not care to store an exception.
+    ///
+    /// # Result
+    /// The JSValue that results from calling object as a function, or NULL if
+    /// an exception is thrown or object is not a function.
     pub fn JSObjectCallAsFunction(
         ctx: JSContextRef,
         object: JSObjectRef,
@@ -983,16 +1059,49 @@ extern "C" {
         length: size_t,
         exception: *mut JSValueRef,
     ) -> JSObjectRef;
+    /// Returns a pointer to the raw data buffer that serves as object's backing
+    /// store or NULL if object is not a Typed Array object.
+    ///
+    /// Note: The pointer returned by this function is temporary and is not
+    /// guaranteed to remain valid across JavaScriptCore API calls.
+    ///
+    /// # Parameters
+    /// * ctx          The execution context to use.
+    /// * object       The Typed Array object whose backing store pointer to
+    ///                return.
+    /// * exception    A pointer to a JSValueRef in which to store an exception,
+    ///                if any. Pass NULL if you do not care to store an
+    ///                exception.
     pub fn JSObjectGetTypedArrayBytesPtr(
         ctx: JSContextRef,
         object: JSObjectRef,
         exception: *mut JSValueRef,
     ) -> *mut ::std::os::raw::c_void;
+
+    /// Returns the length of the Typed Array object or 0 if the object is not a
+    /// Typed Array object.
+    ///
+    /// # Parameters
+    /// * ctx          The execution context to use.
+    /// * object       The Typed Array object whose length to return.
+    /// * exception    A pointer to a JSValueRef in which to store an exception,
+    ///                if any. Pass NULL if you do not care to store an
+    ///                exception.
     pub fn JSObjectGetTypedArrayLength(
         ctx: JSContextRef,
         object: JSObjectRef,
         exception: *mut JSValueRef,
     ) -> size_t;
+    /// Return the byte length of the Typed Array object or 0 if the object is
+    /// not a Typed Array object.
+    ///
+    /// # Parameters
+    ///
+    /// * ctx          The execution context to use.
+    /// * object       The Typed Array object whose byte length to return.
+    /// * exception    A pointer to a JSValueRef in which to store an exception,
+    ///                if any. Pass NULL if you do not care to store an
+    ///                exception.
     pub fn JSObjectGetTypedArrayByteLength(
         ctx: JSContextRef,
         object: JSObjectRef,

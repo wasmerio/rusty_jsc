@@ -2,16 +2,18 @@
 name = "rusty_jsc_macros"
 version = "0.1.0"
 description = "Macros for rusty_jsc"
-authors = [ "Wasmer Engineering Team <engineering@wasmer.io>", "Pekka Enberg" ]
+authors = [ "Wasmer Engineering Team <engineering@wasmer.io>", "Pekka Enberg", "Adrien Zinger" ]
 repository = "https://github.com/wasmerio/rusty_jsc"
 license = "MIT"
 edition = "2021"
 
 [lib]
 proc-macro = true
+
 [target.'cfg(target_os = "linux")'.build-dependencies]
 pkg-config = "0.3.9"
 
 [dependencies]
 quote = "1.0.21"
 syn = { version = "1", features = [ "full" ] }
+proc-macro-error = "1.0.4"

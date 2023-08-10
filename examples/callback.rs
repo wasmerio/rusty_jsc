@@ -2,29 +2,30 @@ use rusty_jsc::{JSContext, JSObject, JSValue};
 use rusty_jsc_macros::callback;
 
 #[callback]
-fn foo(
+fn example(
     ctx: JSContext,
-    function: JSObject,
-    this: JSObject,
+    _function: JSObject,
+    _this: JSObject,
     args: &[JSValue],
 ) -> Result<JSValue, JSValue> {
     println!(
         "hello from Rust land! len: {}, value[0]: {}",
         args.len(),
-        args[0].to_string(&ctx).unwrap()
+        args[0].to_js_string(&ctx).unwrap()
     );
     Ok(JSValue::string(&ctx, "Returning a string to JS!"))
 }
 
 #[callback]
-fn foo2<A>(
+#[allow(unused)] // Just for the example
+fn example2<T>(
     ctx: JSContext,
-    function: JSObject,
-    this: JSObject,
-    args: &[JSValue],
+    _function: JSObject,
+    _this: JSObject,
+    _args: &[JSValue],
 ) -> Result<JSValue, JSValue>
 where
-    A: Clone,
+    T: Clone,
 {
     println!("hello from Rust land!");
     Ok(JSValue::string(&ctx, "Hey"))
@@ -32,14 +33,16 @@ where
 
 fn main() {
     let mut context = JSContext::default();
-    let callback = JSValue::callback(&context, Some(foo));
-    let global = context.get_global_object();
-    global.set_property(&context, "foo", callback).unwrap();
-    let foo = global
-        .get_property(&context, "foo")
+    let callback = JSValue::callback(&context, Some(example));
+
+    let mut global = context.get_global_object();
+    global.set_property(&context, "example", callback).unwrap();
+    let example = global
+        .get_property(&context, "example")
+        .unwrap()
         .to_object(&context)
         .unwrap();
-    let result = foo.call(
+    let result = example.call_as_function(
         &context,
         None,
         &[
@@ -49,14 +52,14 @@ fn main() {
     );
     println!(
         "direct call: {}",
-        result.unwrap().to_string(&context).unwrap()
+        result.unwrap().to_js_string(&context).unwrap()
     );
-    match context.evaluate_script("foo(1, 2, 3)", 1) {
+    match context.evaluate_script("example(1, 2, 3)", 1) {
         Ok(value) => {
-            println!("{}", value.to_string(&context).unwrap());
+            println!("{}", value.to_js_string(&context).unwrap());
         }
         Err(e) => {
-            println!("Uncaught: {}", e.to_string(&context).unwrap())
+            println!("Uncaught: {}", e.to_js_string(&context).unwrap())
         }
     }
 }

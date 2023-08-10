@@ -13,7 +13,7 @@ fn main() {
     );
 
     let result = callback
-        .call(
+        .call_as_function(
             &context,
             Some(&callback),
             &[JSValue::number(&context, 5f64)],
